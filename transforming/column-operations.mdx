@@ -1,0 +1,143 @@
+---
+title: "Column Operations in OpenRefine: Add, Split, and Reorder"
+description: "Add, split, rename, remove, and reorder columns to reshape the schema of your dataset, including adding columns by fetching URLs."
+keywords: ["column operations", "add column", "split column", "rename column", "remove column", "reorder columns", "fetch URLs", "columnize"]
+---
+
+Column operations modify the structure of your dataset rather than individual cell values. They let you derive new columns from existing ones, split a single column into several, adjust column order, and clean up columns you no longer need. Like all OpenRefine operations, column changes are recorded in the undo history and can be reversed at any time.
+
+## Add column based on expression
+
+`core/column-addition` creates a new column by evaluating a GREL (or Jython/Clojure) expression against an existing base column. One new cell is produced per filtered row; rows excluded by the current engine filter receive blank cells in the new column.
+
+**Opening the dialog:** Click the base column dropdown, choose **Edit column → Add column based on this column…**.
+
+Key parameters:
+
+| Parameter | Meaning |
+|-----------|---------|
+| `baseColumnName` | The column whose cell values (and context) the expression receives |
+| `expression` | A GREL/Jython/Clojure expression; `value` refers to the base column cell |
+| `newColumnName` | Name for the new column (must be unique) |
+| `columnInsertIndex` | Zero-based position at which to insert the new column |
+| `onError` | `keep-original`, `set-to-blank`, or `store-error` |
+
+```grel
+# Copy a column with a simple transformation
+value.trim()
+
+# Build a full name from first and last name columns
+cells["FirstName"].value + " " + cells["LastName"].value
+
+# Extract a domain from an email address
+value.split("@")[1]
+```
+
+<Note>
+  The new column's cells are only populated for rows that pass the current row filter. Rows outside the filter receive blank cells.
+</Note>
+
+## Add column by fetching URLs
+
+`core/column-addition-by-fetching-urls` is a long-running variant of the column addition operation that evaluates a URL expression for each filtered row and fetches the HTTP response body into the new column.
+
+**Opening the dialog:** Click the base column dropdown, choose **Edit column → Add column by fetching URLs…**.
+
+Additional parameters beyond the standard column addition:
+
+| Parameter | Default | Meaning |
+|-----------|---------|---------|
+| `delay` | — | Milliseconds to wait between requests (rate limiting) |
+| `cacheResponses` | `false` | Cache up to 2 048 unique URLs for 10 minutes to avoid repeat fetches |
+| `httpHeadersJson` | `[]` | Array of `{ "name": "...", "value": "..." }` header objects |
+
+```grel
+# Construct a URL from a column value
+"https://api.example.com/lookup?id=" + value
+```
+
+<Warning>
+  Fetching URLs makes outbound HTTP requests from the machine running OpenRefine. Respect the rate limits of the target service and use the `delay` parameter to throttle requests.
+</Warning>
+
+The operation runs as a background process and shows a progress bar. You can cancel it mid-way; rows already fetched retain their values.
+
+## Split column
+
+`core/column-split` splits one column into multiple new columns, appending numbered copies of the column name (e.g., `City 1`, `City 2`). Unlike split multi-valued cells, each fragment goes into a separate column on the same row rather than into additional rows.
+
+**Opening the dialog:** Click the column dropdown, choose **Edit column → Split into several columns…**.
+
+Two modes are available:
+
+<Tabs>
+  <Tab title="By separator">
+    Splits on a literal string or regular expression. Use `maxColumns` to cap the number of output columns; excess content lands in the last column.
+
+    ```grel
+    # Splitting "New York, NY, 10001" on ", " → "New York" | "NY" | "10001"
+    ```
+  </Tab>
+  <Tab title="By field lengths">
+    Splits into fixed-width substrings using an array of character counts. Any remainder beyond the declared lengths is discarded.
+  </Tab>
+</Tabs>
+
+Options:
+
+- **Guess cell type** (`guessCellType`) — attempt to parse each fragment as a number, boolean, or date.
+- **Remove original column** (`removeOriginalColumn`) — delete the source column after splitting.
+
+## Rename column
+
+`core/column-rename` renames a single column. The old name must exist and the new name must not already be in use.
+
+**Opening the dialog:** Click the column dropdown, choose **Edit column → Rename this column**.
+
+```text
+oldColumnName → newColumnName
+```
+
+Renaming a column cascades automatically through the undo history: subsequent operations that refer to the old name are updated so that re-applying the history continues to work correctly.
+
+## Remove column
+
+`core/column-removal` permanently deletes a column and all its cell data. The operation takes only the `columnName` parameter.
+
+**Opening the dialog:** Click the column dropdown, choose **Edit column → Remove this column**.
+
+<Warning>
+  Removing a column deletes all cell data in that column. Use undo immediately if you remove the wrong column.
+</Warning>
+
+To remove multiple columns at once, use **Edit columns → Re-order / remove columns…** and uncheck the columns you want to remove.
+
+## Reorder / remove columns
+
+`core/column-reorder` sets a new column order. When `isPureReorder` is `true`, any column not listed in `columnNames` is appended at the end of the list, preserving all existing columns. When `isPureReorder` is `false`, any column not listed is deleted from the project.
+
+**Opening the dialog:** Click any column dropdown, choose **Edit columns → Re-order / remove columns…**. A drag-and-drop panel shows all columns; columns dragged to the left panel are kept, and columns left in the right panel are removed.
+
+<Tip>
+  The reorder dialog is the fastest way to remove several columns at once: drag everything you want to drop into the right panel and click **OK**.
+</Tip>
+
+## Move column
+
+Individual columns can also be moved one step at a time:
+
+| Operation | Effect |
+|-----------|--------|
+| `core/column-move` with an `index` | Moves the column to a specific zero-based index |
+| **Move column to beginning** | Places the column at index 0 |
+| **Move column to end** | Places the column at the last index |
+| **Move column left** | Decrements the column's index by 1 |
+| **Move column right** | Increments the column's index by 1 |
+
+**Opening these options:** Click the column dropdown, choose **Edit column → Move column left / right / to beginning / to end**.
+
+## Column key-value columnize
+
+When your dataset has a key column and a value column representing dynamic attributes, use **Edit column → Key/value columnize…** (backed by `core/key-value-columnize`) to pivot those rows into one column per unique key.
+
+See [Cell operations — Key-value columnize](/transforming/cell-operations#key-value-columnize) for the full parameter reference. The operation is accessible from either the key column or the value column dropdown.

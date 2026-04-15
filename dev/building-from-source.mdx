@@ -1,0 +1,165 @@
+---
+title: 'Build OpenRefine from Source with Maven and Node.js'
+description: 'Clone the repository, install prerequisites, and use the refine shell script to build, run, test, and lint OpenRefine on Mac, Linux, or Windows.'
+keywords: ['build', 'source', 'maven', 'node', 'java', 'jdk', 'refine script', 'development', 'compile']
+---
+
+Building OpenRefine from source lets you run the latest development code, test patches before they are released, or contribute new features and bug fixes. The build system uses Apache Maven for the Java backend and npm for the frontend JavaScript dependencies. A convenience shell script — `refine` on Mac/Linux and `refine.bat` on Windows — wraps the common Maven commands and handles JVM configuration so you rarely need to invoke Maven directly.
+
+## Prerequisites
+
+Before cloning the repository, install the following tools.
+
+<CardGroup cols={3}>
+  <Card title="JDK 17+" icon="coffee">
+    OpenRefine requires Java 17 or later. The `refine` script checks the major version on startup and exits with an error if the requirement is not met. Java 25 and above are not tested and produce a warning. Download from [Adoptium](https://adoptium.net/).
+  </Card>
+  <Card title="Apache Maven" icon="box">
+    Maven manages Java dependencies and the build lifecycle. Install via your package manager or download from [maven.apache.org](https://maven.apache.org/). Set `MAVEN_HOME` or `M2_HOME`, or ensure `mvn` is on `PATH`.
+  </Card>
+  <Card title="Node.js 18+" icon="hexagon">
+    Node.js is required to install frontend dependencies via npm. The build script runs `npm install` inside `main/webapp` automatically. Download from [nodejs.org](https://nodejs.org/).
+  </Card>
+</CardGroup>
+
+## Cloning the repository
+
+```bash
+git clone https://github.com/OpenRefine/OpenRefine.git
+cd OpenRefine
+```
+
+The repository contains several top-level directories. `server/` holds the Jetty startup code, `main/` holds the core implementation and the web application, `modules/` holds shared interfaces, and `extensions/` holds bundled extensions.
+
+## Running OpenRefine
+
+<Tabs>
+  <Tab title="Mac / Linux">
+    ```bash
+    ./refine
+    ```
+
+    On the first run, the script compiles the Java sources with Maven and downloads npm dependencies before starting the server. Subsequent runs detect compiled classes and start faster.
+
+    Once started, open [http://localhost:3333](http://localhost:3333) in your browser. OpenRefine attempts to open the URL automatically using the platform's default browser.
+  </Tab>
+  <Tab title="Windows">
+    ```batch
+    refine.bat
+    ```
+
+    On Windows, use `refine.bat` in the repository root. All the same actions and options are available as on Mac/Linux. Open [http://localhost:3333](http://localhost:3333) after the server starts.
+  </Tab>
+</Tabs>
+
+<Note>
+Configuration is read from `refine.ini` in the repository root. You can copy `refine.ini` to `refine-dev.ini` for local overrides — `refine-dev.ini` is not tracked by Git and takes precedence when present.
+</Note>
+
+### Runtime configuration options
+
+Key settings from `refine.ini` and their defaults:
+
+| Setting | Default | Description |
+|---|---|---|
+| `REFINE_PORT` | `3333` | TCP port OpenRefine listens on |
+| `REFINE_INTERFACE` | `127.0.0.1` | Network interface to bind |
+| `REFINE_MEMORY` | `1400M` | JVM maximum heap size |
+| `REFINE_MIN_MEMORY` | `1400M` | JVM minimum heap size |
+| `REFINE_AUTOSAVE_PERIOD` | `5` (minutes) | How often projects are auto-saved |
+
+You can also pass options directly on the command line:
+
+```bash
+./refine -p 3334 -m 2048M
+```
+
+## Common refine script commands
+
+<Steps>
+  <Step title="Build">
+    Compiles Java sources and installs frontend npm dependencies without starting the server.
+
+    ```bash
+    ./refine build
+    ```
+
+    Internally this runs `mvn process-resources` followed by `mvn compile test-compile`.
+  </Step>
+  <Step title="Run tests">
+    Runs the full Maven test suite, including both server-side and extension tests.
+
+    ```bash
+    ./refine test
+    ```
+
+    To run only the main module tests:
+
+    ```bash
+    ./refine server_test
+    ```
+
+    To run only extension tests:
+
+    ```bash
+    ./refine extensions_test
+    ```
+  </Step>
+  <Step title="Lint">
+    Reformats Java source files according to OpenRefine's code style conventions using the Maven Formatter and impsort plugins.
+
+    ```bash
+    ./refine lint
+    ```
+
+    Run this before submitting a pull request to avoid CI failures caused by formatting differences.
+  </Step>
+  <Step title="Clean">
+    Removes compiled classes and build artifacts.
+
+    ```bash
+    ./refine clean
+    ```
+  </Step>
+</Steps>
+
+### All available actions
+
+```text
+run                  Run OpenRefine [default]
+build                Build OpenRefine
+clean                Clean compiled classes
+test                 Run all tests
+extensions_test      Run the extensions tests
+server_test          Run the server tests
+e2e_tests            Run the end-to-end Cypress tests
+lint                 Reformat source code
+mac_dist <version>   Make macOS binary distribution
+windows_dist <version>  Make Windows binary distribution
+linux_dist <version> Make Linux binary distribution
+dist <version>       Make all distributions
+```
+
+### CLI flags
+
+| Flag | Description |
+|---|---|
+| `-p <port>` | Override the listening port |
+| `-i <interface>` | Bind to a specific network interface |
+| `-m <memory>` | Set JVM min and max heap (e.g., `2048M`) |
+| `-d <path>` | Path to the workspace data directory |
+| `-v <level>` | Log verbosity: `error`, `warn`, `info`, `debug`, `trace` |
+| `--debug` | Enable JVM remote debugging on port 8000 |
+| `--jmx` | Enable JMX monitoring |
+
+## IDE setup
+
+The repository includes configuration files for Eclipse in the `IDEs/eclipse/` directory. Import the project as a Maven project in your IDE of choice. Both IntelliJ IDEA and Eclipse can import the root `pom.xml` directly and will pick up the multi-module structure automatically.
+
+<Tip>
+When running from an IDE, set the working directory to the repository root and add `-Drefine.webapp=main/webapp` as a JVM argument so the server can locate the web application files.
+</Tip>
+
+<Warning>
+Do not start OpenRefine from your IDE while another instance is already running on the same port. The server logs `Failed to start server - is there another copy running already on this port/address?` and exits when the port is already bound.
+</Warning>

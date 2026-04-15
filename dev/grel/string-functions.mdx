@@ -1,0 +1,250 @@
+---
+title: 'GREL String Functions: Complete Reference for OpenRefine'
+description: 'Complete reference for all GREL string functions in OpenRefine: trimming, splitting, replacing, escaping, hashing, encoding, fingerprinting, and more.'
+keywords: ['grel string functions', 'openrefine string', 'grel replace', 'grel split', 'grel escape', 'grel regex']
+---
+
+GREL provides a comprehensive set of string functions for cleaning, parsing, and transforming text values. All string functions can be called with dot notation (`value.trim()`) or function notation (`trim(value)`). Functions that accept a regex pattern accept either a compiled regex literal (`/pattern/`) or a plain string.
+
+## Whitespace and case
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `trim` | `string s` | string | Removes leading and trailing whitespace |
+| `chomp` | `string s, string sep` | string | Removes `sep` from the end of `s` if present; otherwise returns `s` unchanged |
+| `toLowercase` | `string s` | string | Converts all characters to lowercase |
+| `toUppercase` | `string s` | string | Converts all characters to uppercase |
+| `toTitlecase` | `string s` | string | Capitalizes the first letter of each word; optionally accepts a delimiter string |
+
+```text
+"  Hello World  ".trim()              // "Hello World"
+"Hello World".chomp("World")         // "Hello "
+"Hello World".toLowercase()          // "hello world"
+"hello world".toUppercase()          // "HELLO WORLD"
+"once upon a midnight dreary".toTitlecase()  // "Once Upon A Midnight Dreary"
+"jean-michel jarre".toTitlecase(" -")        // "Jean-Michel Jarre"
+```
+
+## Testing and searching
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `contains` | `string s, string or pattern sub` | boolean | Returns `true` if `s` contains `sub` (string or regex) |
+| `startsWith` | `string s, string sub` | boolean | Returns `true` if `s` starts with `sub` |
+| `endsWith` | `string s, string sub` | boolean | Returns `true` if `s` ends with `sub` |
+| `indexOf` | `string s, string sub` | number | Returns the first character index of `sub` in `s`, or `-1` if not found |
+| `lastIndexOf` | `string s, string sub` | number | Returns the last character index of `sub` in `s`, or `-1` if not found |
+
+```text
+"food".contains("oo")                // true
+"food".contains(/[aeiou]{2}/)        // true
+"food".startsWith("foo")             // true
+"food".endsWith("ood")               // true
+"internationalization".indexOf("nation")       // 5
+"parallel".lastIndexOf("a")                    // 3
+```
+
+## Slicing and substrings
+
+The top-level `slice` (also callable as `substring`) function works on both strings and arrays:
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `slice` / `substring` | `string s or array a, number from, number to (optional)` | string or array | Returns characters from index `from` up to (not including) index `to`. Negative indices count from the end. |
+| `get` | `o, number or string from, optional number to` | depends | Multi-purpose: on strings behaves like `slice`; on arrays returns element or sub-array; on objects returns named field |
+
+```text
+"hello world".slice(6)        // "world"
+"hello world".slice(0, 5)     // "hello"
+"hello world".slice(-5)       // "world"
+"hello".get(1)                // "e"
+```
+
+## Replacing
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `replace` | `string s, string or regex find, string replace` | string | Replaces all occurrences of `find` with `replace`. `find` can be a regex. |
+| `replaceChars` | `string s, string find, string replace` | string | Character-by-character replacement: each character in `find` is replaced by the character at the same position in `replace` |
+| `replaceEach` | `string s, array find, array replace` | string | Replaces each substring from the `find` array with the corresponding string from the `replace` array |
+
+```text
+"The cow jumps".replace("cow", "cat")      // "The cat jumps"
+"hello".replace(/[aeiou]/, "*")            // "h*ll*"
+"hello".replaceChars("aeiou", "AEIOU")     // "hEllO"
+"aabbcc".replaceEach(["aa","bb"], ["x","y"]) // "xybcc"  (Note: wait for replaceEach to be available in your version)
+```
+
+## Splitting
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `split` | `string s, string or regex sep, optional boolean preserveTokens` | array | Splits `s` on `sep`. If `preserveTokens` is `true`, empty segments are preserved. |
+| `splitByLengths` | `string s, number n1, number n2, ...` | array | Splits `s` into substrings of the given lengths; excess characters are discarded |
+| `splitByCharType` | `string s` | array | Splits `s` into groups of consecutive characters with the same Unicode category |
+| `smartSplit` | `string s, optional string sep` | array | Splits `s` on `sep`, or auto-detects tab/comma if no separator given; handles quoted fields |
+
+```text
+"a,b,,c".split(",")                  // ["a","b","","c"]
+"a,b,,c".split(",", false)           // ["a","b","c"]
+"internationalization".splitByLengths(5, 6, 3)  // ["inter","nation","ali"]
+"A1b2".splitByCharType()             // ["A","1","b","2"]
+"one,\"two,three\",four".smartSplit(",")  // ["one","two,three","four"]
+```
+
+## Finding and matching
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `find` | `string s, substring or regex p` | array of strings | Returns all non-overlapping matches of `p` in `s` |
+| `match` | `string s, regex p` | array of strings | Matches `s` against `p` in its entirety; returns an array of all capturing groups, or `null` if no match |
+
+```text
+"one 2 three 4".find(/\d+/)          // ["2","4"]
+"2024-01-15".match(/(\d{4})-(\d{2})-(\d{2})/)  // ["2024","01","15"]
+"hello".match(/h(.+)/)               // ["ello"]
+```
+
+<Info>
+`find()` scans for all matches. `match()` requires the entire string to match the pattern and returns capturing groups only.
+</Info>
+
+## Partitioning
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `partition` | `string s, string or regex fragment, optional boolean omitFragment` | array | Splits `s` into `[before, fragment, after]` on the first occurrence of `fragment` |
+| `rpartition` | `string s, string or regex fragment, optional boolean omitFragment` | array | Like `partition`, but splits on the **last** occurrence of `fragment` |
+
+```text
+"hello world".partition(" ")         // ["hello"," ","world"]
+"hello world".partition(" ", true)   // ["hello","world"]
+"a.b.c".rpartition(".")              // ["a.b",".",  "c"]
+```
+
+## Escaping and encoding
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `escape` | `string s, string mode` | string | Escapes `s` for the given mode: `html`, `xml`, `csv`, `javascript`, `url`, `urlpath`, `urlform`, `urlfragment` |
+| `unescape` | `string s, string mode` | string | Reverses escaping for: `html`, `xml`, `csv`, `url`, `javascript` |
+| `encode` | `string s, string encoding` | string | Encodes `s` using: `base16`, `base32`, `base32hex`, `base64`, `base64url` |
+| `decode` | `string s, string encoding` | string | Decodes `s` using: `base16`, `base32`, `base32hex`, `base64`, `base64url` |
+| `reinterpret` | `string s, string target encoding, string source encoding` | string | Re-encodes `s` from one character encoding to another (e.g., UTF-8, ISO-8859-1) |
+
+```text
+"<b>Hello</b>".escape("html")        // "&lt;b&gt;Hello&lt;/b&gt;"
+"&lt;b&gt;".unescape("html")         // "<b>"
+"Hello".encode("base64")             // "SGVsbG8="
+"SGVsbG8=".decode("base64")          // "Hello"
+"café".reinterpret("UTF-8", "ISO-8859-1")
+```
+
+## Hashing and fingerprinting
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `md5` | `string s` | string | Returns the MD5 hex digest of `s` |
+| `sha1` | `string s` | string | Returns the SHA-1 hex digest of `s` |
+| `fingerprint` | `string s` | string | Canonical fingerprint used in key collision clustering: lowercases, strips punctuation, sorts words |
+| `ngramFingerprint` | `string s, number n` | string | Returns the n-gram fingerprint of `s` |
+| `ngram` | `string s, number n` | array | Returns all word n-grams of size `n` from `s` |
+| `phonetic` | `string s, string encoding (optional)` | string | Phonetic encoding using `metaphone3` (default), `metaphone`, `doublemetaphone`, `soundex`, or `cologne` |
+
+```text
+"hello".md5()                         // "5d41402abc4b2a76b9719d911017c592"
+"hello".sha1()                        // "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d"
+"  The Quick Brown Fox  ".fingerprint()  // "brown fox quick the"
+"the cat sat".ngram(2)                // ["the cat","cat sat"]
+"Smith".phonetic()                    // "SM0"
+"Smith".phonetic("soundex")           // "S530"
+```
+
+## Normalization and Unicode
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `normalize` | `string s` | string | Removes diacritics and normalizes extended western characters to ASCII |
+| `unicode` | `string s` | array | Returns an array of Unicode code point descriptions for each character |
+| `unicodeType` | `string s` | array | Returns an array of Unicode category names for each character |
+
+```text
+"café".normalize()                    // "cafe"
+"Hi".unicode()                        // ["U+0048 LATIN CAPITAL LETTER H", ...]
+"Hi!".unicodeType()                   // ["uppercase_letter", "lowercase_letter", "other_punctuation"]
+```
+
+## String metrics
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `diff` | `o1, o2` | string | Returns the remainder of `o2` starting where it first differs from `o1` |
+| `levenshteinDistance` | `string s1, string s2` | number | Returns the Levenshtein edit distance between two strings |
+
+```text
+"hello".diff("helloo")               // "o"
+levenshteinDistance("kitten", "sitting")  // 3
+```
+
+<Note>
+`diff` also accepts two date objects with a third string argument specifying the time unit (`"years"`, `"months"`, `"days"`, `"hours"`, `"minutes"`, `"seconds"`, `"milliseconds"`, `"nanos"`), returning the numeric difference.
+</Note>
+
+## Language detection
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `detectLanguage` | `string s` | string | Detects the language of `s` and returns the ISO 639-1 language code (e.g., `"en"`, `"fr"`) |
+
+```text
+"Bonjour le monde".detectLanguage()  // "fr"
+```
+
+## Range
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `range` | `string 'a'` or `string 'a, b'` or `string 'a, b, c'` or one/two/three integers | array | Generates a numeric range array. `a` to `b` (exclusive) with step `c` (default 1) |
+
+```text
+range(5)           // [0,1,2,3,4]
+range(1, 6)        // [1,2,3,4,5]
+range(0, 10, 2)    // [0,2,4,6,8]
+range("1, 6, 2")   // [1,3,5]
+```
+
+## JSON and URI parsing
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `parseJson` | `string s` | JSON object | Parses a JSON string and returns the parsed object; use dot notation to access fields |
+| `parseUri` | `string url` | JSON object | Parses a URI and returns an object with fields: `scheme`, `host`, `path`, `query`, `fragment` |
+
+```text
+value.parseJson()["name"]
+value.parseUri()["host"]
+```
+
+## HTML/XML parsing
+
+These functions work with the result of `parseHtml()` or `parseXml()`. They are typically chained after a `select()` call that returns elements.
+
+| Function | Description |
+|---|---|
+| `parseHtml` | Parses an HTML string; returns a document object |
+| `parseXml` | Parses an XML string; returns a document object |
+| `select(element, string cssSelector)` | Returns an array of matching child elements using CSS/Jsoup selector syntax |
+| `xmlAttr(element, string name)` | Returns the value of attribute `name` on the element |
+| `innerHtml(element)` | Returns the inner HTML including child tags |
+| `htmlText(element)` | Returns the visible text content, stripping all tags |
+| `innerXml(element)` | Returns inner XML content of child elements |
+| `ownText(element)` | Returns direct text content of the element, excluding children |
+| `scriptText(element)` | Returns the data content of `<script>` or `<style>` elements |
+| `wholeText(element)` | Returns un-normalized text including whitespace and newlines |
+| `parent(element)` | Returns the parent element |
+
+```text
+value.parseHtml().select("a")[0].xmlAttr("href")
+value.parseHtml().select("p").forEach(e, e.htmlText())
+value.parseXml().select("item > title")[0].innerXml()
+```

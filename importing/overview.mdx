@@ -1,0 +1,87 @@
+---
+title: "Importing Data into OpenRefine: Project Basics"
+description: "Learn how OpenRefine creates projects from files, URLs, clipboard text, and Google Sheets, and understand row mode vs. record mode before you start."
+keywords: ["openrefine import", "create project", "row mode", "record mode", "column headers", "import settings"]
+---
+
+Every time you load data into OpenRefine, you create a **project** — a self-contained workspace stored on your local machine. A project holds the original imported data together with the entire history of every transformation you apply. Because all data stays on your computer, nothing is sent to any external server during import or processing.
+
+The import workflow has two phases: first you specify the source of your data, then OpenRefine gives you a configuration panel where you adjust parsing options and preview the result before committing. You can rename the project and set encoding, header behaviour, and format-specific options at this stage. Once you click **Create Project**, OpenRefine stores the parsed result and you begin working with it.
+
+## Import sources
+
+OpenRefine supports four ways to bring data in.
+
+<CardGroup cols={2}>
+  <Card title="Upload a file" icon="upload">
+    Drag a file onto the drop zone or click to browse. You can select multiple files at once; OpenRefine will merge them into a single project if they share the same format.
+  </Card>
+  <Card title="Fetch from a URL" icon="globe">
+    Paste a direct download URL. OpenRefine fetches the content and hands it to the same parsing pipeline as a local file. Useful for public datasets and APIs that return plain data.
+  </Card>
+  <Card title="Paste from clipboard" icon="clipboard">
+    Paste text directly into the clipboard field. This is the quickest way to import a small snippet of CSV, TSV, or JSON without saving a file first.
+  </Card>
+  <Card title="Google Sheets" icon="table">
+    Provide the URL of a publicly visible Google Sheets spreadsheet. OpenRefine downloads the sheet and parses it as tabular data. The sheet must be set to "Anyone with the link can view".
+  </Card>
+</CardGroup>
+
+## Import workflow
+
+<Steps>
+  <Step title="Open the import dialog">
+    On the OpenRefine home screen (`http://127.0.0.1:3333`), click **Create Project** in the left panel. The four source tabs — **This Computer**, **Web Addresses (URLs)**, **Clipboard**, and **Google Data** — are displayed.
+  </Step>
+  <Step title="Choose your source and provide the data">
+    Select the appropriate tab. For a local file, drag the file onto the upload area or click to open a file picker. For a URL or clipboard text, paste the content into the text field. Then click **Next**.
+  </Step>
+  <Step title="Select files (for multi-file or archive uploads)">
+    If you uploaded a ZIP archive or selected several files, OpenRefine shows a file selection panel. Check the files you want to include in the project and click **Configure Parsing Options**.
+  </Step>
+  <Step title="Configure parsing options">
+    OpenRefine detects the format and displays format-specific options (separator character, header lines, sheet selection, etc.). A live preview updates as you change settings. Adjust the options until the preview looks correct.
+  </Step>
+  <Step title="Name your project and create it">
+    Enter a project name in the **Project Name** field at the top of the parsing panel. OpenRefine pre-fills this from the file name. Click **Create Project** when you are satisfied with the preview.
+  </Step>
+</Steps>
+
+## Column header handling
+
+For tabular formats (CSV, TSV, Excel, ODS, and others), OpenRefine reads the first row as column headers by default. The **Parse next** field controls how many rows are treated as headers. Set it to `0` to treat every row as data, which causes OpenRefine to generate automatic column names (`Column 1`, `Column 2`, …).
+
+You can also supply your own header names manually by unchecking the header-lines option and typing a comma-separated list of column names into the **Column names** field. If you provide custom names, OpenRefine sets `headerLines` to `1` internally so that the first data row is not re-used as a header.
+
+<Tip>
+  If your file has comment lines or boilerplate text before the actual header, use **Ignore first** to skip those lines. The count applies before the header-line count, so ignoring 2 lines and then reading 1 header line means row 1 and 2 are discarded and row 3 becomes the header.
+</Tip>
+
+## Row mode vs. record mode
+
+OpenRefine has two ways of thinking about your data after import.
+
+**Row mode** is the default. Every physical row in the source file becomes exactly one row in OpenRefine, and each row is treated independently. This is the right choice for flat tabular data.
+
+**Record mode** is used when one logical entity spans multiple rows. In record mode, the first non-blank value in the first (key) column defines a record boundary. All subsequent rows that have a blank value in that column are considered part of the same record as the row above. This matches the way data with multi-valued fields is often stored — for example, a person row followed by several address rows.
+
+You switch between modes using the **Rows / Records** toggle at the top-left of the data grid, not at import time. However, the structure you establish at import time (which column is first, whether rows are blank) determines whether record mode will be meaningful.
+
+<Note>
+  Record mode affects how facets count, how GREL expressions apply across a record, and how row-level operations like **Remove matching rows** behave. If you are working with hierarchical data imported from JSON or XML — where OpenRefine flattens nested arrays into multiple rows — record mode is almost always the right choice.
+</Note>
+
+## Project settings at import time
+
+The parsing panel exposes several settings that apply across all formats:
+
+| Setting | What it controls |
+|---|---|
+| **Project name** | The display name stored with the project. Can be changed later from the project page. |
+| **Character encoding** | The text encoding used to decode the file. OpenRefine defaults to UTF-8 but will attempt to detect the encoding automatically. Click the encoding field to open a picker. |
+| **Ignore first N lines** | Lines to discard before any parsing begins, counting from the top of the file. |
+| **Parse next N lines as column headers** | How many rows to consume as header rows. Their values are joined with a space if more than one row is used. |
+| **Discard initial N rows of data** | Skip data rows after the header, useful if the file has a summary row immediately after the header. |
+| **Load at most N rows** | Limit the number of data rows imported. Useful for previewing large files or working with a sample. |
+| **Store blank rows** | Whether to keep rows where every cell is empty. Defaults to on. |
+| **Store blank cells as nulls** | Whether to store empty cells as null values (the default) or as empty strings. |

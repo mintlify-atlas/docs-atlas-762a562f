@@ -1,0 +1,236 @@
+---
+title: "How to Install OpenRefine on Windows, Mac, and Linux"
+description: "Download and run OpenRefine on your operating system, configure memory settings, and optionally build from source using the refine shell script."
+keywords: ["openrefine install", "download openrefine", "openrefine setup", "openrefine windows", "openrefine mac", "openrefine linux"]
+---
+
+OpenRefine runs as a local web server on your own computer and is controlled through your browser. Installation is straightforward: download the package for your operating system, unpack it, and launch the application. No account, no installer wizard, and no data leaves your machine.
+
+## System requirements
+
+Before you install, confirm your system meets the following requirements.
+
+| Requirement | Minimum version |
+|---|---|
+| Java (JDK) | JDK 17 or newer ([Adoptium](https://adoptium.net/) recommended) |
+| Operating system | Windows 10+, macOS 10.15+, or a modern Linux distribution |
+| Browser | Any modern browser (Chrome, Firefox, Safari, Edge) |
+| RAM | 1 GB available (2 GB or more recommended for large datasets) |
+
+<Note>
+  The Windows installer package bundles its own JRE, so you do not need to install Java separately if you use the Windows installer. On macOS and Linux you must have a JDK 17+ in your `PATH` or `JAVA_HOME` before launching. The `refine` script checks the Java version on startup and exits with an error if it is below 17.
+</Note>
+
+If you want to build from source, you additionally need:
+
+- [Apache Maven](https://maven.apache.org/)
+- [Node.js 18](https://nodejs.org/) or newer
+
+## Download OpenRefine
+
+All stable releases are published on the [OpenRefine releases page](https://github.com/OpenRefine/OpenRefine/releases). Download the archive that matches your operating system.
+
+<Tip>
+  To run the very latest development code before it is released, log in to GitHub and download a snapshot artifact from the [snapshot release workflow](https://github.com/OpenRefine/OpenRefine/actions/workflows/snapshot_release.yml). Click the most recent run with a green checkmark and scroll to the **Artifacts** section.
+</Tip>
+
+## Platform-specific installation
+
+<Tabs>
+  <Tab title="Windows">
+    Two Windows packages are available: a self-contained installer that bundles Java, and a plain `.zip` archive for users who already have a JDK.
+
+    <Steps>
+      <Step title="Download the Windows installer">
+        From the [releases page](https://github.com/OpenRefine/OpenRefine/releases), download `openrefine-win-with-java-installer-<version>.exe`. This package includes a bundled JRE — no separate Java installation needed.
+
+        Alternatively, download `openrefine-win-<version>.zip` if you already have JDK 11+ installed.
+      </Step>
+      <Step title="Run the installer or unzip">
+        If you downloaded the `.exe` installer, double-click it and follow the on-screen prompts. OpenRefine will be installed to `C:\Program Files\OpenRefine` by default, with a Start Menu shortcut and an optional desktop icon.
+
+        If you downloaded the `.zip` archive, extract it to any folder, for example `C:\Tools\OpenRefine`.
+      </Step>
+      <Step title="Launch OpenRefine">
+        Double-click `openrefine.exe` inside the installation folder. A terminal window opens and, after a moment, your default browser opens automatically to `http://127.0.0.1:3333`.
+
+        If the browser does not open automatically, navigate to `http://127.0.0.1:3333` yourself.
+      </Step>
+    </Steps>
+
+    <Warning>
+      Windows may display a SmartScreen warning because the executable is not from a major software vendor. Click **More info** then **Run anyway** to proceed.
+    </Warning>
+  </Tab>
+
+  <Tab title="macOS">
+    <Steps>
+      <Step title="Download the macOS package">
+        From the [releases page](https://github.com/OpenRefine/OpenRefine/releases), download `openrefine-mac-<version>.dmg`.
+      </Step>
+      <Step title="Mount and install">
+        Double-click the `.dmg` file to mount it. Drag **OpenRefine.app** to your **Applications** folder.
+      </Step>
+      <Step title="Launch OpenRefine">
+        Open OpenRefine from **Applications** or from Spotlight. The first time you run it, macOS Gatekeeper may ask you to confirm. Right-click the app icon and choose **Open**, then click **Open** in the dialog.
+
+        OpenRefine starts a local server and opens your browser to `http://127.0.0.1:3333`.
+      </Step>
+    </Steps>
+
+    <Note>
+      On Apple Silicon (M1/M2/M3) Macs, make sure the JDK you have installed is ARM-native or universal. Adoptium provides both variants on their download page.
+    </Note>
+  </Tab>
+
+  <Tab title="Linux">
+    <Steps>
+      <Step title="Install a JDK">
+        OpenRefine requires JDK 11 or newer. On Debian/Ubuntu-based distributions:
+
+        ```bash
+        sudo apt update && sudo apt install default-jdk
+        ```
+
+        On Red Hat/Fedora-based distributions:
+
+        ```bash
+        sudo dnf install java-11-openjdk
+        ```
+
+        Verify your installation:
+
+        ```bash
+        java -version
+        ```
+      </Step>
+      <Step title="Download and extract the Linux archive">
+        From the [releases page](https://github.com/OpenRefine/OpenRefine/releases), download `openrefine-linux-<version>.tar.gz`, then extract it:
+
+        ```bash
+        tar -xzf openrefine-linux-<version>.tar.gz
+        cd openrefine-<version>
+        ```
+      </Step>
+      <Step title="Launch OpenRefine">
+        Run the `refine` shell script:
+
+        ```bash
+        ./refine
+        ```
+
+        OpenRefine starts on port 3333. Open your browser and navigate to:
+
+        ```
+        http://127.0.0.1:3333
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## Running from source
+
+If you have cloned the OpenRefine repository, you can build and run directly from source using the `refine` script.
+
+<Steps>
+  <Step title="Ensure prerequisites are installed">
+    You need JDK 17+, Apache Maven, and Node.js 18+. Verify each:
+
+    ```bash
+    java -version
+    mvn -version
+    node -v
+    ```
+  </Step>
+  <Step title="Run the refine script">
+    From the root of the cloned repository:
+
+    ```bash
+    ./refine
+    ```
+
+    On Windows, use `refine.bat` instead.
+
+    The script reads `refine.ini` for configuration, compiles on first run, downloads frontend dependencies via `npm install`, and then starts the server.
+  </Step>
+  <Step title="Open the browser UI">
+    Navigate to `http://127.0.0.1:3333` in your browser. The default port is `3333`, bound to the loopback interface.
+  </Step>
+</Steps>
+
+The `refine` script accepts several flags:
+
+```
+./refine [options] <action>
+
+Options
+  -p <port>        Port OpenRefine listens on. Default: 3333
+  -i <interface>   Network interface to bind to. Default: 127.0.0.1
+  -m <memory>      JVM heap size (min and max). Default: 1400M
+  -d <path>        Path to the data directory
+  -v <level>       Verbosity: error, warn, info, debug, trace. Default: info
+
+Actions
+  run              Start OpenRefine (default)
+  build            Compile the project
+  test             Run all tests
+```
+
+## Memory configuration
+
+For large datasets, the default heap allocation of 1400 MB may not be sufficient. You can increase it in `refine.ini`:
+
+```ini
+# refine.ini
+
+# Maximum JVM heap size
+REFINE_MEMORY=1400M
+
+# Initial (and minimum) heap size
+REFINE_MIN_MEMORY=1400M
+```
+
+Change both values to the same amount. For example, to allocate 2 GB:
+
+```ini
+REFINE_MEMORY=2048M
+REFINE_MIN_MEMORY=2048M
+```
+
+You can also pass the `-m` flag at launch time without editing the file:
+
+```bash
+./refine -m 2048M
+```
+
+<Note>
+  `refine.ini` is only read when you launch OpenRefine through the `refine` shell script or `refine.bat`. If you run the `.exe` or `.app` package directly, use the `JAVA_OPTIONS` environment variable or the bundled configuration dialog instead.
+</Note>
+
+## Accessing the browser UI
+
+Once OpenRefine is running, open your browser and go to:
+
+```
+http://127.0.0.1:3333
+```
+
+The default port is `3333`. If port 3333 is already in use, you can change it by editing `REFINE_PORT` in `refine.ini` or passing `-p <port>` on the command line:
+
+```bash
+./refine -p 3334
+```
+
+OpenRefine binds to `127.0.0.1` (localhost only) by default, so it is not accessible from other machines on your network unless you explicitly set `-i 0.0.0.0`.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Load your first dataset and run your first transformation.
+  </Card>
+  <Card title="Importing data" icon="file-import" href="/importing/overview">
+    Learn which file formats OpenRefine supports and how to configure import options.
+  </Card>
+</CardGroup>

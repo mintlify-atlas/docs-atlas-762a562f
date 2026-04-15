@@ -1,0 +1,171 @@
+---
+title: 'OpenRefine Architecture: Jetty, Butterfly, and Data Model'
+description: 'How OpenRefine is structured internally: Jetty server, Butterfly module system, the project data model, command/operation pattern, and expression engine.'
+keywords: ['architecture', 'jetty', 'butterfly', 'module', 'extension', 'grel', 'command', 'operation', 'data model', 'grid']
+---
+
+OpenRefine is a Java application that runs a local HTTP server and serves a browser-based UI from `localhost:3333`. The backend is built on the Eclipse Jetty servlet container. All user interactions — navigating facets, applying transforms, exporting data — are HTTP requests handled by Java command classes on the server. The frontend is a jQuery-based single-page application that communicates with those commands via AJAX. This architecture means OpenRefine runs entirely on your local machine: no data is sent to any external service unless you explicitly trigger a reconciliation or web-fetch operation.
+
+## High-level structure
+
+```
+OpenRefine/
+├── server/          # Jetty startup: Refine.java, RefineServer
+├── modules/
+│   └── core/        # Core Java interfaces: Exporter, Command, Operation, …
+├── main/
+│   ├── src/         # Core implementation classes
+│   └── webapp/      # Web application root
+│       ├── WEB-INF/
+│       │   └── web.xml          # Registers RefineServlet
+│       └── modules/
+│           └── core/            # Frontend module (JS, CSS, HTML templates)
+└── extensions/      # Optional extension modules
+```
+
+A single servlet — `RefineServlet` — is registered in `web.xml` to handle all requests (`/*`). `RefineServlet` extends the Butterfly framework's `Butterfly` base class and acts as the front controller for the entire application.
+
+## Jetty server
+
+The entry point is `com.google.refine.Refine` in `server/src/`. On startup it reads configuration from `refine.ini` and JVM system properties, then initialises a `RefineServer` instance (a subclass of Jetty's `Server`) and attaches either a TCP connector (default: `127.0.0.1:3333`) or a Unix domain socket connector.
+
+```java
+// server/src/com/google/refine/Refine.java
+port = Configurations.getInteger("refine.port", DEFAULT_PORT);   // 3333
+iface = Configurations.get("refine.interface", DEFAULT_IFACE);   // 127.0.0.1
+host = Configurations.get("refine.host", iface);
+```
+
+The server loads `main/webapp` as a `WebAppContext`, which Jetty treats as a standard Java web application. GZIP compression is enabled in `web.xml`. Autosave runs on a background `ScheduledExecutorService` (default every five minutes).
+
+## Butterfly module system
+
+`RefineServlet` extends `edu.mit.simile.butterfly.Butterfly`, a lightweight web-framework module system developed at MIT SIMILE. Butterfly provides:
+
+- **Module discovery** — scans the `butterfly.modules.path` for directories containing a `MOD-INF/module.json` descriptor.
+- **Module isolation** — each module has its own class loader and can declare its own dependencies.
+- **Request routing** — maps URL paths to modules and delegated handlers.
+
+The built-in `core` module lives at `main/webapp/modules/core/`. Extensions installed by the user are placed in the data directory under `extensions/` (e.g., `~/.local/share/openrefine/extensions/` on Linux). Each extension follows the same module layout and registers its own commands, importers, and exporters during initialisation.
+
+```
+modules/core/
+├── MOD-INF/
+│   └── module.json      # Module descriptor (name, version, dependencies)
+├── scripts/             # JavaScript (dialogs, facets, data table view)
+├── styles/              # CSS
+└── views/               # Velocity HTML templates
+```
+
+## Project data model
+
+A **Project** is the central data structure. Its state at any point in time is called a **Grid** — an ordered collection of rows and an ordered list of named columns.
+
+<CardGroup cols={2}>
+  <Card title="Grid" icon="table">
+    The current rectangular view of project data. Rows are numbered from zero. The grid reflects all operations that have been applied and is the source from which exporters pull data.
+  </Card>
+  <Card title="Row / Record" icon="rows">
+    A **Row** is a single line of cells indexed by column position. OpenRefine also supports a **Record** mode where consecutive rows sharing the same key cell are grouped into a logical record.
+  </Card>
+  <Card title="Cell" icon="square">
+    Each cell holds a value (string, number, boolean, date, or null) and optionally a **ReconCandidate** storing reconciliation metadata (entity name, ID, score, match status).
+  </Card>
+  <Card title="ColumnModel" icon="layout-columns">
+    The ordered list of column definitions. Each column has a name and a zero-based `cellIndex`. The column model is serialised alongside the project and versioned with the operation history.
+  </Card>
+</CardGroup>
+
+### Operation history
+
+Every data-changing action creates an **AbstractOperation** object that is appended to the project's `HistoryStore`. Operations are the replayable, serialisable units of work — they are what appears in the **Undo/Redo** panel and in the JSON produced by **Extract operations**. Applying an operation typically spawns a background `HistoryProcess` that notifies the UI of progress.
+
+## Command vs. operation pattern
+
+OpenRefine distinguishes between two request handling layers.
+
+<Tabs>
+  <Tab title="Commands">
+    **Commands** (`com.google.refine.commands.Command`) are HTTP request handlers registered in the servlet. Each command maps to a URL like `/command/core/export-rows` or `/command/core/apply-operations`. Commands handle authentication checks, parameter parsing, and response serialisation. Most commands are **not** history-tracked — they perform immediate, non-undoable actions such as fetching facet data, previewing an expression, or triggering an export.
+
+    Commands are registered programmatically during module initialisation:
+
+    ```java
+    // RefineServlet registers commands by name → class
+    registerCommand(module, "export-rows", new ExportRowsCommand());
+    registerCommand(module, "apply-operations", new ApplyOperationsCommand());
+    ```
+  </Tab>
+  <Tab title="Operations">
+    **Operations** (`com.google.refine.model.AbstractOperation`) represent history-tracked transformations. When a user applies a column transform or mass-edit, the UI posts to a command that parses the request and creates the appropriate operation. The operation is then run on the project and added to the history.
+
+    Operations are serialised to JSON so they can be extracted from one project and applied to another via **Apply operations**. Each operation implements `createProcess()` to return a potentially asynchronous `Process` object.
+
+    ```java
+    // Example: a transform operation serialises as:
+    {
+      "op": "core/text-transform",
+      "engineConfig": { "facets": [], "mode": "row-based" },
+      "columnName": "price",
+      "expression": "value.toNumber()",
+      "onError": "keep-original"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Expression engine
+
+OpenRefine evaluates expressions in three languages. The language is selected with a prefix in the expression string.
+
+<AccordionGroup>
+  <Accordion title="GREL — Google Refine Expression Language (default)">
+    GREL is OpenRefine's native expression language. Expressions operate on a **cell context** with variables such as `value`, `cells`, `row`, `record`, and `rowIndex`. GREL provides a rich standard library covering string manipulation, array operations, date parsing and formatting, JSON and XML parsing, math functions, and more.
+
+    ```text
+    value.trim().toUppercase()
+    cells["first_name"].value + " " + cells["last_name"].value
+    jsonize(value)
+    ```
+
+    GREL expressions have no prefix (or an explicit `grel:` prefix).
+  </Accordion>
+  <Accordion title="Jython (Python 2)">
+    Jython expressions run Python 2 code inside the JVM via the Jython interpreter. The same cell context variables are available as Python globals. The Jython library path is configured via `-Dpython.path` at startup.
+
+    ```python
+    return value.upper()
+    ```
+
+    Use the `jython:` prefix to select this engine.
+  </Accordion>
+  <Accordion title="Clojure">
+    Clojure expressions are evaluated by the Clojure runtime on the JVM. Cell context variables are bound as Clojure vars.
+
+    ```clojure
+    (str value)
+    ```
+
+    Use the `clojure:` prefix to select this engine.
+  </Accordion>
+</AccordionGroup>
+
+The expression engine is invoked by the **Expression preview dialog** and by any operation that accepts an expression parameter (text transforms, column additions, facets by expression, etc.). Results from GREL expressions are also used by the **Templating exporter** inside `{{ }}` delimiters.
+
+## Extension points
+
+OpenRefine exposes several registries that extensions can populate during module initialisation.
+
+| Registry | Purpose |
+|---|---|
+| `ExporterRegistry` | Maps format name strings to `Exporter` implementations. Call `ExporterRegistry.registerExporter(format, exporter)`. |
+| `ImportingManager` | Manages file format importers and importing controllers. |
+| `OperationRegistry` | Maps operation `op` names to `AbstractOperation` subclasses for deserialisation. |
+| `FacetRegistry` | Maps facet type names to `Facet` implementations. |
+| `ReconciliationServiceRegistry` | Manages configured reconciliation service endpoints. |
+
+Extensions are loaded as Butterfly modules from the `extensions/` path in the user data directory. An extension's `MOD-INF/module.json` declares its name and dependencies. The extension's `controller.js` (a server-side Rhino script) runs during startup to register commands, operations, and other contributions.
+
+<Note>
+Extensions that register custom exporters should implement either `WriterExporter` (for text-based output written to a `java.io.Writer`) or `StreamExporter` (for binary formats written to an `OutputStream`). Both interfaces extend the base `Exporter` interface which requires only `getContentType()`.
+</Note>

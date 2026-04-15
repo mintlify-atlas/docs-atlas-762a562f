@@ -1,0 +1,169 @@
+---
+title: 'Database extension: import and export SQL data'
+description: 'Import rows from MySQL, PostgreSQL, MariaDB, or SQLite into an OpenRefine project by running a SQL query against a saved or one-off database connection.'
+keywords: ['database', 'SQL', 'MySQL', 'PostgreSQL', 'MariaDB', 'SQLite', 'JDBC', 'import', 'export']
+---
+
+The Database extension ships with OpenRefine and adds an import controller that lets you pull rows from a relational database directly into a project. It supports four databases out of the box — MySQL, PostgreSQL, MariaDB, and SQLite — each with its own JDBC driver bundled in the extension. The same project also provides SQL export through OpenRefine's core exporter, which lives under `main/src/com/google/refine/exporters/sql`.
+
+## Supported databases
+
+| Database   | Type identifier | Default port | JDBC driver                           |
+|------------|-----------------|-------------|---------------------------------------|
+| MySQL      | `mysql`         | 3306        | `com.mysql.cj.jdbc.Driver` (Connector/J 9.x) |
+| PostgreSQL | `postgresql`    | 5432        | `org.postgresql.Driver` (42.x)        |
+| MariaDB    | `mariadb`       | 3306        | `org.mariadb.jdbc.Driver` (3.x)       |
+| SQLite     | `sqlite`        | n/a         | `org.sqlite.JDBC` (3.x)               |
+
+<Note>
+  SQLite databases are opened in read-only mode (`open_mode=1`) and network-attached databases (`//` or `\\` prefixes) are explicitly rejected. Only local file paths are accepted.
+</Note>
+
+## Connecting to a database
+
+When you start a new import from the OpenRefine home page and choose **SQL Database**, you are presented with a connection form. The form collects the following parameters, which map directly to the `DatabaseConfiguration` class in the extension:
+
+| Field             | Description                                                              |
+|-------------------|--------------------------------------------------------------------------|
+| **Connection name** | A label for saving this connection for reuse.                          |
+| **Database type** | One of `mysql`, `postgresql`, `mariadb`, or `sqlite`.                   |
+| **Host**          | Hostname or IP address. Must not contain `(` or `=` characters.         |
+| **Port**          | TCP port. Leave blank for the default.                                   |
+| **Database name** | For SQLite, this is the absolute path to the `.db` file.                |
+| **Schema**        | Optional schema name (used by PostgreSQL).                               |
+| **Username**      | Database user account. Not required for SQLite.                          |
+| **Password**      | Stored encrypted on disk using Jasypt.                                   |
+| **Use SSL**       | Appends `?useSSL=true` to the connection URL for MySQL/PostgreSQL.       |
+
+### Connection URL format
+
+The extension builds JDBC URLs in this form:
+
+```
+jdbc:<type>://<host>[:<port>]/<database>[?useSSL=true]
+```
+
+**Examples:**
+
+<Tabs>
+  <Tab title="MySQL">
+    ```
+    jdbc:mysql://db.example.com:3306/mydb?useSSL=true
+    ```
+  </Tab>
+  <Tab title="PostgreSQL">
+    ```
+    jdbc:postgresql://db.example.com:5432/mydb?useSSL=false
+    ```
+  </Tab>
+  <Tab title="MariaDB">
+    ```
+    jdbc:mariadb://db.example.com:3306/mydb?useSSL=false
+    ```
+  </Tab>
+  <Tab title="SQLite">
+    ```
+    jdbc:sqlite:/absolute/path/to/data.db?open_mode=1&limit_attached=0
+    ```
+  </Tab>
+</Tabs>
+
+### Saved connections
+
+The extension persists connections by name using the `SavedConnectionCommand`. Saved connections appear in a dropdown on the import form so you do not have to retype credentials. Passwords are encrypted using Jasypt before being written to disk.
+
+## Importing data with a SQL query
+
+<Steps>
+  <Step title="Open the import dialog">
+    On the OpenRefine home page, click **Create Project** and choose **SQL Database** from the list of data sources.
+  </Step>
+  <Step title="Connect or choose a saved connection">
+    Fill in the connection form or select a previously saved connection from the dropdown, then click **Connect**.
+
+    OpenRefine calls `TestConnectCommand` to verify the credentials before proceeding. If the connection fails, an error message is displayed with the JDBC exception text.
+  </Step>
+  <Step title="Enter a SQL query">
+    Type a `SELECT` query in the query box. The extension wraps your query with `SELECT * FROM (...) data LIMIT ? OFFSET ?` to support paginated preview:
+
+    ```sql
+    SELECT id, name, created_at
+    FROM customers
+    WHERE country = 'DE'
+    ORDER BY created_at DESC
+    ```
+
+    Click **Test Query** to validate the statement without loading all rows. OpenRefine calls `TestQueryCommand` and reports any SQL syntax errors.
+  </Step>
+  <Step title="Preview and create the project">
+    Click **Preview** to load the first rows. Each result-set column becomes a project column. When you are satisfied, click **Create Project**.
+
+    The extension reads rows in batches using a fetch size of 10 rows to avoid holding large result sets in memory.
+  </Step>
+</Steps>
+
+## Registered commands
+
+The extension registers the following HTTP commands under the `database` module prefix:
+
+| Command endpoint         | Java class                  | Description                                                    |
+|--------------------------|-----------------------------|----------------------------------------------------------------|
+| `test-connect`           | `TestConnectCommand`        | Verifies that a connection can be opened.                      |
+| `connect`                | `ConnectCommand`            | Opens a connection and returns database metadata.              |
+| `saved-connection`       | `SavedConnectionCommand`    | Reads, writes, and deletes saved connection profiles.          |
+| `execute-query`          | `ExecuteQueryCommand`       | Deprecated. Kept for backward compatibility.                   |
+| `test-query`             | `TestQueryCommand`          | Parses and dry-runs a SQL statement.                           |
+
+## Adding support for another database
+
+To add a new database vendor, you implement a `DatabaseService` subclass and register it at startup.
+
+<Steps>
+  <Step title="Implement DatabaseService">
+    Extend `com.google.refine.extension.database.DatabaseService` and provide concrete implementations of:
+
+    ```java
+    public Connection getConnection(DatabaseConfiguration dbConfig) throws DatabaseServiceException;
+    public boolean testConnection(DatabaseConfiguration dbConfig) throws DatabaseServiceException;
+    public DatabaseInfo connect(DatabaseConfiguration dbConfig) throws DatabaseServiceException;
+    public DatabaseInfo executeQuery(DatabaseConfiguration dbConfig, String query) throws DatabaseServiceException;
+    public DatabaseInfo testQuery(DatabaseConfiguration dbConfig, String query) throws DatabaseServiceException;
+    public List<DatabaseColumn> getColumns(DatabaseConfiguration dbConfig, String query) throws DatabaseServiceException;
+    public List<DatabaseRow> getRows(DatabaseConfiguration dbConfig, String query) throws DatabaseServiceException;
+    ```
+
+    Use `MySQLDatabaseService` or `PgSQLDatabaseService` as a reference.
+  </Step>
+  <Step title="Register the SQL driver">
+    In a `static` block, call `SQLType.registerSQLDriver()` with your driver's canonical class name:
+
+    ```java
+    static {
+        SQLType.registerSQLDriver("mydb", com.example.MyDriver.class.getCanonicalName());
+        instance = new MyDatabaseService();
+    }
+    ```
+  </Step>
+  <Step title="Register the DatabaseService">
+    Call `DatabaseService.DBType.registerDatabase()` at startup. The simplest place is from `controller.js` after the default services are loaded:
+
+    ```javascript
+    Packages.com.google.refine.extension.database.DatabaseService.DBType
+        .registerDatabase("mydb", Packages.com.example.MyDatabaseService.getInstance());
+    ```
+  </Step>
+  <Step title="Add the JDBC driver dependency">
+    Add the driver JAR as a `<dependency>` in `pom.xml`. The `maven-dependency-plugin` copies it to `module/MOD-INF/lib/` automatically.
+  </Step>
+  <Step title="Wire up the UI defaults">
+    In `module/scripts/index/database-source-ui.js`, add your database type to the defaults block at line 93 to populate the default port and host fields.
+  </Step>
+</Steps>
+
+## SQL export
+
+OpenRefine's core includes a SQL exporter at `main/src/com/google/refine/exporters/sql`. This exporter is separate from the Database extension and generates `INSERT` or `CREATE TABLE` + `INSERT` statements for any project. It is accessible from **Export → SQL dump** in the project menu and does not require a live database connection.
+
+<Tip>
+  The SQL exporter is useful for seeding a database from cleaned OpenRefine data. The Database extension handles the reverse flow: reading from a database into OpenRefine.
+</Tip>

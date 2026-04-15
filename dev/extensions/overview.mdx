@@ -1,0 +1,198 @@
+---
+title: 'OpenRefine extensions: bundled and third-party'
+description: 'OpenRefine ships with four bundled extensions and supports third-party extensions that can add importers, exporters, operations, commands, and UI panels.'
+keywords: ['extensions', 'plugins', 'controller.js', 'MOD-INF', 'pom.xml', 'custom importer', 'custom exporter']
+---
+
+OpenRefine's extension system lets you add capabilities without modifying core code. Each extension is a self-contained module that registers its functionality during startup through a `MOD-INF/controller.js` file. Four extensions ship with OpenRefine out of the box: **Database**, **Wikibase**, **Jython**, and **PC-Axis**. Third-party extensions follow the same structure and are installed by dropping a folder into the `extensions/` directory.
+
+## Bundled extensions
+
+<CardGroup cols={2}>
+  <Card title="Database" icon="database" href="/dev/extensions/database">
+    Import data from MySQL, PostgreSQL, MariaDB, and SQLite via JDBC. Also provides SQL export through OpenRefine's core exporter.
+  </Card>
+  <Card title="Wikibase" icon="globe" href="/dev/extensions/wikibase">
+    Align project columns to a Wikibase schema and upload structured edits to Wikidata or any other Wikibase instance.
+  </Card>
+  <Card title="Jython" icon="code" href="#">
+    Registers Python (via Jython 2.7) as an expression language alongside GREL and Clojure. Uses `jython-standalone` and sets `python.path` at startup.
+  </Card>
+  <Card title="PC-Axis" icon="file" href="#">
+    Registers an importer for the `.px` statistical file format used by national statistics agencies. Maps `.px` files to the `text/line-based/pc-axis` format.
+  </Card>
+</CardGroup>
+
+## What extensions can do
+
+An extension can register any combination of the following:
+
+- **Commands** — HTTP endpoints served under `/command/<module>/<name>` handled by Java classes that extend `Command`.
+- **Importers** — New import controllers registered with `ImportingManager.registerController()`. Importers add tabs to the import dialog.
+- **Exporters** — New export formats registered with `ExporterRegistry.registerExporter()`.
+- **Operations** — Project-level operations registered with `OperationRegistry.registerOperation()`. Operations are recorded in the project history.
+- **Expression language parsers** — New scripting languages registered with `MetaParser.registerLanguageParser()`.
+- **Overlay models** — Extra data attached to a project via `Project.registerOverlayModel()`.
+- **GREL functions** — Additional built-in functions registered with `ControlFunctionRegistry.registerFunction()`.
+- **Client-side resources** — JavaScript and CSS files injected into the `/index` and `/project` pages via `ClientSideResourceManager.addPaths()`.
+
+## Extension directory structure
+
+Every extension follows the same layout:
+
+```
+my-extension/
+├── pom.xml                         # Maven build file
+├── module/
+│   ├── MOD-INF/
+│   │   ├── controller.js           # Startup script (required)
+│   │   └── module.properties       # Module metadata
+│   ├── scripts/                    # Client-side JavaScript
+│   └── styles/                     # Client-side CSS
+└── src/                            # Java source files
+```
+
+The `controller.js` file is the entry point. OpenRefine runs it inside the Rhino JavaScript interpreter at startup, calling the `init()` function. The Butterfly servlet framework (`module` global) and all `Packages.*` Java classes are available.
+
+### Minimal controller.js
+
+```javascript
+function init() {
+  // Register a custom command
+  var RS = Packages.com.google.refine.RefineServlet;
+  RS.registerCommand(module, "my-command", new Packages.com.example.MyCommand());
+
+  // Inject a script into the project page
+  var ClientSideResourceManager = Packages.com.google.refine.ClientSideResourceManager;
+  ClientSideResourceManager.addPaths(
+    "project/scripts",
+    module,
+    ["scripts/my-extension.js"]
+  );
+}
+```
+
+### module.properties
+
+```properties
+name = my-extension
+description = A short description of what this extension does
+```
+
+## Installing a third-party extension
+
+<Steps>
+  <Step title="Download the extension">
+    Obtain the extension as a folder or zip archive. The folder must contain `module/MOD-INF/controller.js`.
+  </Step>
+  <Step title="Place it in the extensions directory">
+    Copy the folder into OpenRefine's `extensions/` directory, which lives next to the `webapp/` directory in your installation.
+
+    ```
+    OpenRefine/
+    └── extensions/
+        ├── database/
+        ├── wikibase/
+        └── my-extension/     ← drop it here
+    ```
+  </Step>
+  <Step title="Restart OpenRefine">
+    Stop and restart OpenRefine. The extension is loaded automatically on startup — no configuration file changes are needed.
+  </Step>
+</Steps>
+
+<Note>
+  Third-party extensions are not sandboxed. An extension has full access to the JVM and to the OpenRefine process. Only install extensions you trust.
+</Note>
+
+## Writing a minimal extension
+
+### Maven setup (pom.xml)
+
+Add your extension as a Maven module under the `extensions/` parent POM. The `maven-dependency-plugin` copies runtime JARs into `module/MOD-INF/lib/` during the `compile` phase, which is how OpenRefine loads them.
+
+```xml
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+           http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <artifactId>my-extension</artifactId>
+  <packaging>jar</packaging>
+  <name>OpenRefine - My Extension</name>
+  <parent>
+    <groupId>org.openrefine</groupId>
+    <artifactId>extensions</artifactId>
+    <version>3.10-SNAPSHOT</version>
+  </parent>
+
+  <build>
+    <finalName>openrefine-my-extension</finalName>
+    <sourceDirectory>src</sourceDirectory>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <phase>compile</phase>
+            <goals><goal>copy-dependencies</goal></goals>
+            <configuration>
+              <outputDirectory>module/MOD-INF/lib</outputDirectory>
+              <includeScope>runtime</includeScope>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.openrefine</groupId>
+      <artifactId>core</artifactId>
+      <version>${project.version}</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+</project>
+```
+
+### Registering a new operation
+
+Operations extend `EngineDependentOperation` or `AbstractOperation` and are registered by name. The name must be globally unique across all extensions.
+
+```javascript
+// In controller.js
+Packages.com.google.refine.operations.OperationRegistry.registerOperation(
+  module,
+  "my-operation",
+  Packages.com.example.MyOperation
+);
+```
+
+The class mapping must also be registered so that OpenRefine can deserialize the operation from the project history:
+
+```javascript
+Packages.com.google.refine.RefineServlet.registerClassMapping(
+  "com.example.MyOperation$MyChange",
+  "com.example.MyOperation$MyChange"
+);
+```
+
+### Adding a new importer
+
+Importers are registered with a controller class and an optional format string:
+
+```javascript
+var IM = Packages.com.google.refine.importing.ImportingManager;
+IM.registerController(
+  module,
+  "my-import-controller",
+  new Packages.com.example.MyImportController()
+);
+```
+
+<Tip>
+  Use an existing bundled extension as a reference implementation. The Database extension (`extensions/database/`) demonstrates commands, an import controller, and client-side resource injection. The PC-Axis extension (`extensions/pc-axis/`) shows a minimal importer that registers a file format and extension.
+</Tip>

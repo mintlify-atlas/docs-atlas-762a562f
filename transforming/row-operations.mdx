@@ -1,0 +1,119 @@
+---
+title: "Row Operations in OpenRefine: Remove, Flag, and Reorder"
+description: "Remove matching rows, deduplicate, flag or star rows, keep only matching rows, reorder, and add new rows to control your dataset structure."
+keywords: ["row operations", "remove rows", "duplicate rows", "flag rows", "star rows", "keep matching rows", "reorder rows", "add rows", "record mode"]
+---
+
+Row operations act on the set of rows in your project rather than on individual cell values. They are available from the **All** column's dropdown (the leftmost column in the data grid) and from the **Edit rows** menu. Like all operations, they are fully undoable and recorded in the history panel.
+
+## Row mode vs. record mode
+
+Before working with row operations it is important to understand the two engine modes:
+
+- **Row mode** — every physical row is treated independently.
+- **Record mode** — consecutive rows are grouped into logical records based on the first column (the key column). A record starts wherever the key column cell is non-blank; subsequent rows with a blank key column cell belong to the same record.
+
+Operations like remove, keep, and reorder use the mode that was active when the operation was created. Some operations (flag, star) always operate on individual rows.
+
+<Note>
+  Switch between row mode and record mode using the **rows / records** toggle above the data grid. The engine mode is saved as part of each operation's configuration.
+</Note>
+
+## Remove matching rows
+
+`core/row-removal` deletes every row that is currently matched by the engine filter (facets, text filters, and the row/record mode). Any row that falls outside the filter is preserved.
+
+**Opening the dialog:** Apply the facets that identify the rows you want to remove, then click **All → Edit rows → Remove matching rows**.
+
+<Warning>
+  Row removal is destructive. Check your filter carefully before running it. Use **Undo** immediately if you remove too many rows.
+</Warning>
+
+## Remove duplicate rows
+
+`core/row-remove-duplicates` removes all but the first occurrence of each row when comparing a specified list of columns (`criteria`). Duplicate detection is based on the hash of the normalised string representations of the criteria columns; dates are normalised to ISO-8601 format (`yyyy-MM-dd'T'HH:mm:ss`), and null cells are treated as empty strings.
+
+**Opening the dialog:** Click **All → Edit rows → Remove duplicate rows…**, then select the columns that define a unique row identity.
+
+```text
+# Example: remove duplicates based on columns "Name" and "Date"
+criteria: ["Name", "Date"]
+```
+
+<Tip>
+  Sort your data before running remove-duplicates if you want to control which duplicate is retained (the first occurrence in the current order is kept).
+</Tip>
+
+## Flag rows
+
+`core/row-flag` sets or clears the **flagged** attribute on every row that passes the current engine filter. The `flagged` property is `true` to apply the flag and `false` to remove it.
+
+**Opening the dialog:** Use **All → Edit rows → Flag rows** (set) or **Unflag rows** (clear).
+
+Flagged rows can be filtered using the built-in **Flagged rows** facet (**Facet → Facet by flag**), which lets you then apply further operations to just the flagged subset.
+
+## Star rows
+
+`core/row-star` sets or clears the **starred** attribute on every row that passes the current engine filter. The `starred` property is `true` to apply the star and `false` to remove it.
+
+**Opening the dialog:** Use **All → Edit rows → Star rows** (set) or **Unstar rows** (clear).
+
+Starred rows can be filtered using the built-in **Starred rows** facet (**Facet → Facet by star**).
+
+<AccordionGroup>
+  <Accordion title="Practical workflow: flag then remove">
+    1. Use facets and filters to isolate the rows you want to delete.
+    2. Run **Flag rows** to mark them.
+    3. Clear your facets so you can see all rows.
+    4. Add a **Facet by flag** and select the flagged set.
+    5. Run **Remove matching rows**.
+
+    This two-step approach lets you inspect the rows before committing the deletion.
+  </Accordion>
+  <Accordion title="Practical workflow: star important rows">
+    Star rows that need manual review. You can use the Starred rows facet at any later point to return to exactly that subset without having to recreate your filters.
+  </Accordion>
+</AccordionGroup>
+
+## Keep only matching rows
+
+`core/row-keep-matching` is the complement of row removal. It **removes** all rows that do **not** match the current engine filter, keeping only the rows that do match.
+
+**Opening the dialog:** Apply the facets that identify the rows you want to retain, then click **All → Edit rows → Keep matching rows**.
+
+Internally, the operation collects the row indices that match the filter and then deletes every other row using a `RowRemovalChange`.
+
+<Note>
+  "Keep matching" and "Remove matching" are exact inverses: one removes the filtered set, the other removes everything outside it.
+</Note>
+
+## Reorder rows
+
+`core/row-reorder` sorts the rows in the project. It accepts a `SortingConfig` that can define one or more sort criteria (column name, direction, and data type). The sort can be applied in either row mode or record mode.
+
+- In **row mode**, individual rows are sorted independently.
+- In **record mode**, whole records (groups of rows sharing a key) are sorted as units; the internal order of rows within each record is preserved.
+
+**Opening the dialog:** Click any column dropdown, choose **Sort…**. After sorting, a banner appears above the grid. Click **Reorder rows permanently** in that banner to commit the sort as an undoable operation; otherwise the sort is only a temporary view.
+
+```text
+# Example SortingConfig (JSON representation used internally)
+{
+  "criteria": [
+    { "column": "Date", "valueType": "date", "reverse": false },
+    { "column": "Name", "valueType": "string", "reverse": false }
+  ]
+}
+```
+
+## Add rows
+
+`core/row-addition` inserts a list of new (empty) rows at a specified position in the grid. The `index` parameter sets the zero-based insertion point; rows at and after that index are pushed down.
+
+**Opening the dialog:** There is no direct menu entry for arbitrary row addition in the UI; the operation is primarily used when pasting or importing additional records. It can also be triggered programmatically via the Operations API.
+
+The `addedRows` field carries the actual row data. The legacy `rows` field (used in older project files) is accepted for backwards compatibility but its cell contents are ignored — only its length is used to create the correct number of empty rows.
+
+<Note>
+  Adding rows via the UI is typically done through **Import more data** or by pasting data into the grid. The `row-addition` operation records that action so it can be undone.
+</Note>

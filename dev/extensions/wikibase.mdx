@@ -1,0 +1,217 @@
+---
+title: 'Wikibase extension: edit Wikidata from OpenRefine'
+description: 'Map OpenRefine columns to Wikibase properties using the schema editor, preview generated edits, and upload them in batch to Wikidata or any Wikibase instance.'
+keywords: ['wikibase', 'wikidata', 'schema', 'reconciliation', 'batch edit', 'QuickStatements', 'MediaWiki', 'OAuth']
+---
+
+The Wikibase extension ships with OpenRefine and provides a full workflow for contributing structured data to [Wikidata](https://www.wikidata.org/) or any other [Wikibase](https://www.mediawiki.org/wiki/Wikibase) instance. It uses the [Wikidata Toolkit (WDTK)](https://github.com/Wikidata/Wikidata-Toolkit) library (`wdtk-wikibaseapi` and `wdtk-datamodel` at version 0.17) to communicate with the MediaWiki API, and registers its operations, exporters, commands, and a GREL function in `module/MOD-INF/controller.js`.
+
+## Connecting to a Wikibase instance
+
+Before you can upload edits, you must authenticate against a Wikibase MediaWiki API endpoint. The extension supports two authentication methods.
+
+<Tabs>
+  <Tab title="Username and password">
+    Log in using a MediaWiki account with a bot password. Bot passwords are recommended over account passwords and can be created at `Special:BotPasswords` on the target wiki.
+
+    The `LoginCommand` accepts the parameters `wb-api-endpoint`, `wb-username`, and `wb-password`. On successful login, the extension stores session cookies in the browser (prefixed with `openrefine-wikibase-`) so that credentials are remembered across page reloads.
+
+    ```
+    POST /command/wikibase/login
+      wb-api-endpoint=https://www.wikidata.org/w/api.php
+      wb-username=MyBot@my-bot-password
+      wb-password=<bot-password>
+      remember-credentials=on
+    ```
+  </Tab>
+  <Tab title="Owner-only consumer (OAuth 1.0a)">
+    Authenticate using a MediaWiki owner-only consumer. You need four values from `Special:OAuthConsumerRegistration`: consumer token, consumer secret, access token, and access secret.
+
+    ```
+    POST /command/wikibase/login
+      wb-api-endpoint=https://www.wikidata.org/w/api.php
+      wb-consumer-token=<consumer-token>
+      wb-consumer-secret=<consumer-secret>
+      wb-access-token=<access-token>
+      wb-access-secret=<access-secret>
+      remember-credentials=on
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The extension maintains one active connection per MediaWiki API endpoint. Credentials for multiple endpoints are stored in browser cookies simultaneously, allowing you to switch between Wikibase instances without logging out.
+</Note>
+
+### Connecting to other Wikibase instances
+
+The extension is not limited to Wikidata. Any Wikibase installation can be used by pointing the `wb-api-endpoint` parameter to that instance's `api.php` URL. Each Wikibase instance is described by a **manifest** JSON document that the extension fetches via the `FetchManifestCommand`. The manifest (v2) provides:
+
+- `mediawiki.name` — human-readable instance name
+- `mediawiki.api` — the MediaWiki API endpoint
+- `wikibase.site_iri` — the base IRI for entity URIs
+- `wikibase.maxlag` — the maxlag value to use when editing
+- `wikibase.max_edits_per_minute` — rate limit
+- `wikibase.tag` — edit tag template, e.g. `openrefine-${version}`
+- `entity_types` — reconciliation endpoints and site IRIs per entity type
+- `editgroups.url_schema` — URL schema for EditGroups batch tracking
+
+<Tip>
+  Wikidata and Wikimedia Commons ship pre-loaded manifests (`wikidata-manifest-v1.0.js` and `commons-manifest-v2.0.js`). For a private Wikibase instance, host your own manifest and add it via **Wikibase → Manage Wikibase instances** in the project menu.
+</Tip>
+
+## The schema editor
+
+The schema editor is the central component of the extension. It maps your project's columns to the Wikibase data model: items, properties, statements, qualifiers, and references.
+
+### How the schema works
+
+Each project has an optional **Wikibase schema** attached as an overlay model (`project.overlayModels["wikibaseSchema"]`). The schema is a `WikibaseSchema` object that is serialized to JSON and saved with the project history when you click **Save schema**.
+
+Saving a schema creates a `SaveWikibaseSchemaOperation` entry in the project history, which means you can undo and redo schema changes like any other operation.
+
+### Opening the schema editor
+
+In a project, click **Wikibase → Edit Wikibase schema**. The editor opens as a full-page dialog. If no schema exists yet, you are prompted to choose the target Wikibase instance.
+
+### Mapping columns to properties
+
+The schema editor works with reconciled columns. Each row in your project corresponds to one or more Wikibase entity edits. The typical workflow is:
+
+<Steps>
+  <Step title="Reconcile your subject column">
+    Reconcile the column that contains the entities you want to edit (e.g., Q-numbers) against the Wikibase reconciliation endpoint. Unreconciled values that match no entity will cause the extension to create a new entity.
+  </Step>
+  <Step title="Open the schema editor and add an item block">
+    Click **Add item** to add a top-level item block. Select your reconciled column as the subject.
+  </Step>
+  <Step title="Add statements">
+    For each property you want to set, click **Add statement**. Choose the property (e.g., P31 for "instance of"), set the value source (a column, a constant, or a reconciled value), and optionally add qualifiers and references in the same way.
+  </Step>
+  <Step title="Save the schema">
+    Click **Save schema**. This records a `SaveWikibaseSchemaOperation` in the project history and stores the schema as a JSON overlay on the project.
+  </Step>
+</Steps>
+
+### Exporting the schema
+
+The schema can be exported in two formats:
+
+- **Wikibase schema JSON** (`wikibase-schema` exporter) — the raw `WikibaseSchema` JSON, suitable for reuse in another project via **Import schema**.
+- **QuickStatements v1** (`quickstatements` exporter) — a tab-separated batch format that can be run at [quickstatements.toolforge.org](https://quickstatements.toolforge.org/). This lets you review edits without authenticating OpenRefine.
+
+## Previewing edits
+
+Before uploading, you can preview what the schema will produce for every row.
+
+Click **Wikibase → Preview Wikibase edits**. OpenRefine calls `PreviewWikibaseSchemaCommand`, which evaluates the schema against the current project and engine configuration (facets and filters apply) and returns a list of entity edits with any QA warnings.
+
+### QA warnings
+
+The preview engine runs a battery of scrutinizers against the proposed edits. Warnings are categorized by severity:
+
+| Severity    | Meaning                                                                               |
+|-------------|---------------------------------------------------------------------------------------|
+| `INFO`      | Informational note; the edit is probably fine.                                        |
+| `WARNING`   | The edit looks unusual but may be intentional.                                        |
+| `IMPORTANT` | Almost surely wrong; only proceed if you are certain.                                 |
+| `CRITICAL`  | Do not proceed; the edit would violate a hard constraint.                             |
+
+Scrutinizers check constraint violations fetched from the Wikibase constraint properties (e.g., format constraints, single-value constraints, type constraints). A `CRITICAL` warning blocks the upload button in the UI.
+
+The GREL function `wikibaseIssues()` returns the list of QA warning bucket IDs for a given row, letting you filter problematic rows using a **Custom text facet** with:
+
+```
+grel:wikibaseIssues()
+```
+
+## Performing edits
+
+<Steps>
+  <Step title="Log in">
+    Open **Wikibase → Log in to Wikibase** and authenticate. The **Perform edits** button remains disabled until you are logged in.
+  </Step>
+  <Step title="Set upload parameters">
+    In the **Perform Wikibase edits** dialog, set:
+
+    - **Edit summary** — required; appears in the edit history of each edited entity.
+    - **Maximum edits per minute** — rate limiting. Defaults to the value from the manifest.
+    - **Maxlag** — the maximum server lag (in seconds) to tolerate before retrying. Defaults to `5`.
+    - **Results column name** — if set, OpenRefine adds a column to the project that records the outcome of each edit (a URL for successful edits, an error message for failures).
+  </Step>
+  <Step title="Perform edits">
+    Click **Perform edits**. OpenRefine starts a `PerformWikibaseEditsOperation` as a long-running background process.
+
+    The `EditBatchProcessor` fetches existing entity documents in batches of 50, schedules updates using `WikibaseAPIUpdateScheduler`, and submits them one by one via the WDTK `WikibaseDataEditor`. New entities are created with `editor.createEntityDocument()`.
+  </Step>
+  <Step title="Monitor progress">
+    A progress bar appears in the **Processes** panel. You can cancel the upload at any time — edits already submitted cannot be automatically reverted.
+  </Step>
+</Steps>
+
+### Edit tags
+
+The extension automatically tags edits with a tag derived from the manifest's `tag` template. For Wikidata the template is `openrefine-${version}`, which resolves to a tag like `openrefine-3.8`. If the versioned tag does not exist on the target wiki, the extension falls back to the unversioned `openrefine` tag. If neither exists, edits are submitted without a tag.
+
+### EditGroups integration
+
+When the manifest provides an `editgroups.url_schema` (as Wikidata does), the extension appends a batch ID to every edit summary. This allows [EditGroups](https://editgroups.toolforge.org/) to track all edits from a single OpenRefine session as a group and provides a one-click revert link.
+
+## Error handling and resuming
+
+The `PerformWikibaseEditsOperation` runs as a `LongRunningProcess`. Each individual edit returns an `EditResult` that contains:
+
+- `errorCode` — the MediaWiki API error code, or `null` on success.
+- `errorMessage` — a human-readable description of the error.
+- `lastRevisionId` — the revision ID of the entity after the edit.
+- `newEntityUrl` — the URL of a newly created entity, if applicable.
+
+If you configured a results column, each row's cell in that column will contain:
+
+- A link to the edited entity revision on success.
+- An error string on failure (cell value is set as an error using GREL's `error()` function).
+- A blank cell if the row did not generate any edit.
+
+A list facet on the results column using the expression:
+
+```
+grel:if(isError(value), 'failed edit', if(isBlank(value), 'no edit', 'successful edit'))
+```
+
+is automatically created after the upload completes. Use this facet to isolate failed rows, correct the underlying data, and re-run the upload — the operation will skip rows that have already been successfully edited.
+
+<Warning>
+  OpenRefine does not automatically revert edits to Wikibase. If you need to undo a batch, use the EditGroups revert link (Wikidata only) or revert each edit manually in the Wikibase edit history.
+</Warning>
+
+## Registered components
+
+<AccordionGroup>
+  <Accordion title="Commands">
+    | Command endpoint          | Java class                      | Description                                          |
+    |---------------------------|---------------------------------|------------------------------------------------------|
+    | `login`                   | `LoginCommand`                  | Handles username/password and OAuth login/logout.    |
+    | `save-wikibase-schema`    | `SaveWikibaseSchemaCommand`     | Saves the current schema to the project.             |
+    | `preview-wikibase-schema` | `PreviewWikibaseSchemaCommand`  | Evaluates the schema and returns edit previews with QA warnings. |
+    | `perform-wikibase-edits`  | `PerformWikibaseEditsCommand`   | Starts the batch upload process.                     |
+    | `parse-wikibase-schema`   | `ParseWikibaseSchemaCommand`    | Parses and validates a schema JSON string.           |
+    | `fetch-manifest`          | `FetchManifestCommand`          | Fetches and parses a Wikibase manifest from a URL.   |
+  </Accordion>
+  <Accordion title="Operations">
+    | Operation name             | Java class                          | Description                                      |
+    |----------------------------|-------------------------------------|--------------------------------------------------|
+    | `save-wikibase-schema`     | `SaveWikibaseSchemaOperation`       | Records a schema save in the project history.    |
+    | `perform-wikibase-edits`   | `PerformWikibaseEditsOperation`     | Performs batch entity edits via the API.         |
+  </Accordion>
+  <Accordion title="Exporters">
+    | Exporter name       | Java class                  | Description                                              |
+    |---------------------|-----------------------------|----------------------------------------------------------|
+    | `quickstatements`   | `QuickStatementsExporter`   | Exports schema evaluation as QuickStatements v1 format.  |
+    | `wikibase-schema`   | `SchemaExporter`            | Exports the raw schema JSON for reuse in another project.|
+  </Accordion>
+  <Accordion title="GREL functions">
+    | Function name      | Java class                    | Description                                                    |
+    |--------------------|-------------------------------|----------------------------------------------------------------|
+    | `wikibaseIssues`   | `WikibaseIssuesFunction`      | Returns QA warning bucket IDs for the current row, usable in facets. |
+  </Accordion>
+</AccordionGroup>

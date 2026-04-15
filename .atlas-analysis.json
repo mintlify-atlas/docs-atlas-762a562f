@@ -1,28 +1,11 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "name": "OpenRefine",
+  "projectType": "saas",
+  "projectName": "OpenRefine",
+  "projectDescription": "OpenRefine is a free, open source desktop application for cleaning, transforming, and reconciling messy datasets directly in your browser.",
   "theme": "almond",
-  "colors": {
-    "primary": "#049cfc",
-    "light": "#edf9f9",
-    "dark": "#049cfc"
-  },
-  "favicon": "https://media.brand.dev/4fa1def5-0b3b-4b96-a8d1-6b55fd9cd802.jpg",
-  "logo": {
-    "light": "https://media.brand.dev/dd7f4f1f-9df1-486c-8643-5825649e3b28.svg",
-    "dark": "https://media.brand.dev/dd7f4f1f-9df1-486c-8643-5825649e3b28.svg"
-  },
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/OpenRefine/OpenRefine"
-    }
-  },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/OpenRefine/OpenRefine"
-    }
-  },
+  "primaryColor": "#049cfc",
+  "lightColor": "#edf9f9",
+  "darkColor": null,
   "navigation": {
     "tabs": [
       {
@@ -112,5 +95,35 @@
         ]
       }
     ]
-  }
+  },
+  "keyFeatures": [
+    "Import data from CSV, TSV, Excel, JSON, XML, RDF, and more",
+    "Faceted browsing and filtering to explore large datasets",
+    "Clustering algorithms to find and merge inconsistent values",
+    "GREL expression language for powerful data transformations",
+    "Reconciliation against external databases including Wikidata",
+    "Full operation history with undo/redo support",
+    "Export to CSV, Excel, JSON, RDF, SQL, and custom templates",
+    "Extension system supporting Wikibase, Database, Jython, and PC-Axis",
+    "Runs locally in the browser — your data never leaves your machine"
+  ],
+  "publicApiSurface": [
+    "GET /command/core/get-version",
+    "POST /command/core/create-project-from-upload",
+    "GET /command/core/get-models",
+    "POST /command/core/apply-operations",
+    "GET /command/core/export-rows",
+    "POST /command/core/text-transform",
+    "POST /command/core/mass-edit",
+    "POST /command/core/reconcile",
+    "GET /command/core/compute-facets",
+    "POST /command/core/compute-clusters",
+    "POST /command/core/add-column",
+    "POST /command/core/split-column",
+    "POST /command/core/rename-column",
+    "POST /command/core/remove-column",
+    "POST /command/core/reorder-columns",
+    "GET /command/core/get-history",
+    "POST /command/core/undo-redo"
+  ]
 }

@@ -1,80 +1,158 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "OpenRefine Quickstart: Clean Data in 5 Minutes"
+description: "Load a CSV, spot duplicates with facets, merge them with clustering, apply a transform, and export clean data — all without writing any code."
+keywords: ["openrefine quickstart", "data cleaning tutorial", "openrefine facets", "openrefine clustering", "openrefine export"]
 ---
 
-## Get started in three steps
+OpenRefine turns a messy dataset into clean, consistent data through a point-and-click interface in your browser. This guide walks you through a complete workflow — from pasting raw CSV to exporting a finished file — using a small sample dataset that deliberately contains duplicate city names in mixed case. Each step introduces one core concept so that by the end you have a working mental model of how OpenRefine projects, facets, clusters, transforms, and history all fit together.
 
-Get your documentation site running locally and make your first customization.
+<Steps>
+  <Step title="Start OpenRefine">
+    Launch OpenRefine from your **Applications** folder (macOS), the Start Menu (Windows), or by running the `refine` script in the terminal (Linux):
 
-### Step 1: Set up your local environment
+    ```bash
+    ./refine
+    ```
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    After a few seconds, OpenRefine starts a local server and opens your default browser automatically. If the browser does not open, navigate to:
 
-### Step 2: Deploy your changes
+    ```
+    http://127.0.0.1:3333
+    ```
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    You should see the OpenRefine home screen with options to create a new project, open an existing one, or import from a URL.
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    <Note>
+      OpenRefine only binds to `127.0.0.1`, so it is accessible only from your own machine. Your data never leaves your computer.
+    </Note>
+  </Step>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Create a project from clipboard">
+    On the home screen, click **Create Project** in the left sidebar. Under the list of data sources, choose **Clipboard**.
 
-### Step 3: Go live
+    Paste the following CSV directly into the text area:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    ```csv
+    Name,Country,Population
+    new york,us,8336817
+    New York,US,8336817
+    los angeles,US,3979576
+    Los Angeles,us,3979576
+    Chicago,US,2693976
+    chicago,us,2693976
+    ```
+
+    Click **Next**. OpenRefine parses the text and shows a preview of the rows and columns it detected. Confirm that:
+
+    - **Parse data as** is set to **CSV / TSV / separator-based files**
+    - **Parse next** `1` **line(s) as column headers** is checked
+    - The preview shows three columns: **Name**, **Country**, **Population**
+
+    When the preview looks correct, click **Create Project** in the top-right corner. OpenRefine loads the six rows into a new project and opens the project grid.
+
+    <Tip>
+      You can rename the project at any time by clicking the project name at the top of the screen and typing a new one.
+    </Tip>
+  </Step>
+
+  <Step title="Navigate the project grid">
+    The project grid is the main workspace. Take a moment to orient yourself:
+
+    - **Header row** — the grey row at the top shows column names: **Name**, **Country**, **Population**. Click a column name to open its action menu.
+    - **Data rows** — each row is one record from your CSV. The row number appears on the left.
+    - **Show rows selector** — at the top you can switch between showing 5, 10, 25, or 50 rows at a time.
+    - **Left panel** — the **Facet / Filter** panel on the left will display any active facets once you add them.
+    - **Undo / Redo panel** — also on the left, this shows your full operation history.
+
+    <Note>
+      The star and flag icons to the left of each row let you mark rows for manual review. Starred and flagged rows can then be isolated using the **All** column facet.
+    </Note>
+  </Step>
+
+  <Step title="Add a text facet on the Name column">
+    A text facet groups all rows by the unique values in a column, with a count next to each value. This makes duplicate variations immediately visible.
+
+    1. Click the **Name** column header to open its drop-down menu.
+    2. Choose **Facet** > **Text facet**.
+
+    The **Facet / Filter** panel on the left now shows six distinct values — `Chicago`, `Los Angeles`, `New York`, `chicago`, `los angeles`, `new york` — each with a count of **1**. Because the matching is case-sensitive by default, OpenRefine treats `Chicago` and `chicago` as different values even though they represent the same city.
+
+    <Tip>
+      Click **count** above the facet list to sort values by frequency. Click **name** to sort alphabetically. Sorting by count is useful for spotting the most common variants in larger datasets.
+    </Tip>
+  </Step>
+
+  <Step title="Cluster and merge duplicate values">
+    Clustering finds groups of values that are likely the same and lets you merge them with a single action.
+
+    1. In the **Name** text facet panel, click the **Cluster** button.
+    2. OpenRefine opens the **Cluster & Edit** dialog. The default method (**key collision** with the **fingerprint** keying function) immediately detects three clusters:
+       - `new york` / `New York`
+       - `los angeles` / `Los Angeles`
+       - `chicago` / `Chicago`
+    3. For each cluster, OpenRefine suggests the most common value as the **New Cell Value**. You can type a different value if you prefer — for example, change `New York` to `New York` (leave as-is) or type `New York City`.
+    4. Make sure the **Merge?** checkbox is checked for all three clusters.
+    5. Click **Merge Selected & Close**.
+
+    The project grid now shows six rows where all **Name** values are consistent. The text facet on the left updates automatically to show three values, each with a count of **2**.
+
+    <Note>
+      If clustering does not find all the duplicates you expect, try a different method from the **Keying Function** or **Distance Function** drop-downs. The **ngram-fingerprint** and **Levenshtein** methods catch variants that differ by more than just case.
+    </Note>
+  </Step>
+
+  <Step title="Apply a common transform: to titlecase">
+    Common transforms are one-click operations that cover the most frequent data-cleaning needs. Apply title case to the **Name** column to ensure consistent capitalisation:
+
+    1. Click the **Name** column header.
+    2. Choose **Edit cells** > **Common transforms** > **To titlecase**.
+
+    OpenRefine applies the transform to every cell in the column. Values like `new york` (if any remained) would become `New York`. The operation is recorded as a single entry in the **Undo / Redo** history.
+  </Step>
+
+  <Step title="Undo the last step">
+    Every operation in OpenRefine is recorded and fully reversible. To undo the title case transform:
+
+    1. In the left panel, click the **Undo / Redo** tab.
+    2. You will see a numbered list of operations. The most recent step — **Mass edit cells in column Name** — is highlighted.
+    3. Click the step **before** the title case operation (the clustering merge step) to rewind to that point.
+
+    The **Name** column reverts to the state it was in before the title case was applied. You can click forward again in the history to redo the step, or leave it undone and continue from here.
+
+    <Tip>
+      You can extract the full operation history as JSON by clicking **Extract** in the Undo / Redo panel. Paste that JSON into another project's **Apply** dialog to replay the same sequence of transforms on a different dataset — useful for recurring data cleaning workflows.
+    </Tip>
+  </Step>
+
+  <Step title="Export as CSV">
+    When you are satisfied with your data, export it:
+
+    1. Click the **Export** button in the top-right corner of the project grid.
+    2. Choose **Comma-separated value** from the drop-down menu.
+
+    Your browser downloads a `.csv` file containing only the rows currently shown (all rows, unless you have an active facet filter). The exported file reflects every transformation you applied, including the clustering merges.
+
+    <Note>
+      Exporting does not close or delete your project. The project remains saved in OpenRefine and you can return to it at any time from the home screen at `http://127.0.0.1:3333`.
+    </Note>
+  </Step>
+</Steps>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+You have completed a full OpenRefine workflow: import, explore, cluster, transform, undo, and export. From here, explore what else OpenRefine can do:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Importing data" icon="file-import" href="/importing/overview">
+    Load CSV, Excel, JSON, XML, Google Sheets, and more — with fine-grained parsing options.
+  </Card>
+  <Card title="Transforming data" icon="wand-magic-sparkles" href="/transforming/expressions">
+    Write GREL expressions to reshape cells, split columns, and build calculated fields.
+  </Card>
+  <Card title="Reconciliation" icon="link" href="/reconciliation/overview">
+    Match your data against Wikidata or any reconciliation service to produce linked data.
+  </Card>
+  <Card title="Exporting data" icon="file-export" href="/exporting/overview">
+    Export as CSV, Excel, JSON, RDF, SQL, or a fully custom templated format.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

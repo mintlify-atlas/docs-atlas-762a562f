@@ -1,0 +1,277 @@
+---
+title: "Writing GREL, Jython, and Clojure Expressions in OpenRefine"
+description: "Use GREL, Jython, or Clojure in the expression editor to transform cell values, with a live preview pane and persistent expression history."
+keywords: ["GREL", "expressions", "Jython", "Clojure", "expression editor", "forEach", "if", "with", "value.trim", "value.toLowercase"]
+---
+
+OpenRefine evaluates expressions whenever you transform a cell, add a column, create a custom facet, or apply a filter. The same expression dialog is shared across all these entry points: you write the expression in a text area, choose the language, and see a live preview against the first few rows of your data before committing.
+
+## Opening the expression editor
+
+The expression editor appears automatically when you choose any operation that requires one:
+
+- **Edit cells → Transform…** — opens the editor focused on the current column.
+- **Edit column → Add column based on this column…** — opens the editor for the new column expression.
+- **Facet → Custom text facet…** — opens the editor to define a facet key expression.
+
+The editor shows four tabs: **Preview**, **History**, **Starred**, and **Help**.
+
+<Steps>
+  <Step title="Write your expression">
+    Type your expression in the text area. The preview pane updates within 300 ms of each keystroke, showing the result for up to ten sample rows.
+  </Step>
+  <Step title="Choose a language">
+    Select **GREL**, **Jython**, or **Clojure** from the language dropdown. OpenRefine stores your last-used language in a cookie and restores it next time.
+  </Step>
+  <Step title="Check the preview">
+    The preview table shows three columns: the row number, the original cell value, and the transformed result. A syntax error message appears below the text area if the expression cannot be parsed.
+  </Step>
+  <Step title="Commit">
+    Click **OK** to apply the expression. Clicking **Cancel** discards it. The expression is logged to the history tab so you can reuse it later.
+  </Step>
+</Steps>
+
+### Expression history
+
+Every time you click **OK**, the expression is saved to a per-project history (fetched from `command/core/get-expression-history`). The History tab lists previous expressions in reverse chronological order with a **Reuse** link next to each one. Expressions from other projects appear with an "Other projects" label.
+
+You can also navigate history from the keyboard: with the cursor at the beginning of the text area, press **↑** to step back through previous expressions; press **↓** to move forward.
+
+Click the star icon beside any history entry to add it to the Starred tab. Starred expressions persist across projects and are always accessible for reuse or removal.
+
+## Available variables
+
+The following variables are bound for you in every expression context:
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `value` | any | The current cell's value |
+| `cell` | object | The full cell object (`cell.value`, `cell.recon`) |
+| `cells` | object | All cells in the current row, keyed by column name |
+| `row` | object | The current row object (`row.index`, `row.starred`, `row.flagged`, `row.cells`) |
+| `rowIndex` | number | The zero-based index of the current row |
+| `record` | object | The current record (in record mode) |
+
+## GREL
+
+GREL (Google Refine Expression Language) is the primary expression language in OpenRefine. It uses a method-chaining syntax where functions are called with a dot on their subject.
+
+```grel
+# Basic syntax: subject.function(arg1, arg2, ...)
+value.trim()
+value.toLowercase()
+value.toUppercase()
+```
+
+### Referencing other columns
+
+```grel
+# Access another column in the same row
+cells["Column Name"].value
+
+# Combine values from two columns
+cells["FirstName"].value + " " + cells["LastName"].value
+```
+
+### Common string patterns
+
+```grel
+# Remove leading and trailing whitespace
+value.trim()
+
+# Convert to lowercase
+value.toLowercase()
+
+# Replace a substring (plain text)
+value.replace("colour", "color")
+
+# Replace using a regular expression
+value.replace(/\s+/, " ")
+
+# Split a string into an array on a delimiter
+value.split(",")
+
+# Join an array back into a string
+value.split(",").join("; ")
+
+# Extract a portion of a string
+value.substring(0, 4)
+
+# Test whether a string contains a pattern
+value.contains("error")
+```
+
+### Accessing array elements
+
+```grel
+# First element of a split result
+value.split(",")[0]
+
+# Last element
+value.split(",")[-1]
+```
+
+### Numeric and date operations
+
+```grel
+# Convert a string to a number
+value.toNumber()
+
+# Round to 2 decimal places
+value.toNumber().round(2)
+
+# Parse a date string
+value.toDate("yyyy-MM-dd")
+
+# Format a date
+value.toDate("yyyy-MM-dd").toString("dd/MM/yyyy")
+```
+
+## GREL controls
+
+Controls differ from functions in that they take unevaluated expressions as arguments and control whether and how sub-expressions are evaluated.
+
+### `if`
+
+`if(condition, expressionIfTrue, expressionIfFalse)` evaluates `condition`; if it is truthy the first expression is returned, otherwise the second.
+
+```grel
+# Replace blank values with a default
+if(isBlank(value), "Unknown", value)
+
+# Conditional transformation
+if(value.length() > 10, value.substring(0, 10) + "…", value)
+```
+
+The `if` control bubbles errors: if `condition` evaluates to an error, `if` returns that error rather than choosing a branch.
+
+### `forEach`
+
+`forEach(array, variable, expression)` iterates over an array, binding each element to `variable`, and returns a new array of results.
+
+```grel
+# Trim every element in a split array
+forEach(value.split(","), v, v.trim())
+
+# Uppercase every element
+forEach(value.split("|"), item, item.toUppercase()).join("|")
+```
+
+The second argument must be a variable name (not an expression). The original binding of that variable name is restored after the loop.
+
+### `with`
+
+`with(expression, variable, body)` evaluates `expression` once, binds the result to `variable`, then evaluates `body`. Use it to avoid repeating a sub-expression.
+
+```grel
+# Clean a value once and use it twice
+with(value.trim().toLowercase(), cleaned,
+  if(cleaned == "n/a", null, cleaned)
+)
+
+# Parse a date once and format it
+with(value.toDate("M/d/yyyy"), d,
+  d.toString("yyyy-MM-dd")
+)
+```
+
+### Other control functions
+
+| Control | Signature | Purpose |
+|---------|-----------|---------|
+| `filter` | `filter(array, v, test)` | Returns elements of an array where `test` is truthy |
+| `forEachIndex` | `forEachIndex(array, i, v, expr)` | Like `forEach` with access to the element index |
+| `forRange` | `forRange(from, to, step, v, expr)` | Iterates over a numeric range |
+| `forNonBlank` | `forNonBlank(expr, v, nonBlankExpr, blankExpr)` | Evaluates `nonBlankExpr` if `expr` is non-blank, otherwise `blankExpr` |
+| `isBlank` | `isBlank(expr)` | Returns `true` if the value is null or an empty string |
+| `isNonBlank` | `isNonBlank(expr)` | Returns `true` if the value is non-null and non-empty |
+| `isNull` | `isNull(expr)` | Returns `true` if the value is null |
+| `isNotNull` | `isNotNull(expr)` | Returns `true` if the value is not null |
+| `isNumeric` | `isNumeric(expr)` | Returns `true` if the value can be interpreted as a number |
+| `isError` | `isError(expr)` | Returns `true` if the expression produced an error |
+
+## Jython
+
+Jython lets you write Python 2.7 expressions inside OpenRefine. Select **Jython** from the language dropdown to use it.
+
+```python
+# Basic string operations
+return value.strip()
+
+# Conditional logic
+if value is None:
+    return ""
+return value.upper()
+
+# Access another column
+return cells["Country"].value + " - " + value
+```
+
+<Note>
+  Jython expressions must use `return` to produce a value. The same variables (`value`, `cells`, `row`, `rowIndex`, `record`) are available as in GREL.
+</Note>
+
+<Tip>
+  Jython is useful when you need Python's standard library (e.g., `re`, `json`, `datetime`) or when you are more comfortable with Python syntax than GREL.
+</Tip>
+
+## Clojure
+
+Clojure expressions are evaluated using the Clojure runtime bundled with OpenRefine. Select **Clojure** from the language dropdown.
+
+```clojure
+; Trim a string
+(.. value trim)
+
+; Conditional
+(if (nil? value) "" (.toUpperCase value))
+
+; Access another column
+(str (.get cells "Country") " - " value)
+```
+
+<Note>
+  In Clojure expressions, OpenRefine binds `value`, `cell`, `cells`, `row`, `row-index`, and `record` as vars. The last expression in the body is the return value.
+</Note>
+
+## Choosing a language
+
+<CardGroup cols={3}>
+  <Card title="GREL" icon="code">
+    Best for most data-cleaning tasks. Concise method-chaining syntax, built-in string, array, math, and date functions, and a large set of controls.
+  </Card>
+  <Card title="Jython" icon="python">
+    Best when you need Python's standard library or complex data structures. Slightly slower than GREL.
+  </Card>
+  <Card title="Clojure" icon="brackets-curly">
+    Best for users comfortable with functional Lisp-style programming or when you need Java interop.
+  </Card>
+</CardGroup>
+
+## Expression prefixes in operation JSON
+
+When OpenRefine serialises an operation to JSON (e.g., for the Operations API or project history), expressions are prefixed with the language name followed by a colon:
+
+```json
+{
+  "op": "core/text-transform",
+  "expression": "grel:value.trim()",
+  "columnName": "City"
+}
+```
+
+```json
+{
+  "op": "core/text-transform",
+  "expression": "jython:return value.strip()",
+  "columnName": "City"
+}
+```
+
+```json
+{
+  "op": "core/text-transform",
+  "expression": "clojure:(.. value trim)",
+  "columnName": "City"
+}
+```

@@ -1,0 +1,183 @@
+---
+title: 'GREL Array Functions: Complete Reference for OpenRefine'
+description: 'Complete reference for all GREL array functions in OpenRefine: creating, slicing, sorting, filtering, mapping, and combining arrays.'
+keywords: ['grel array functions', 'openrefine array', 'grel forEach', 'grel filter', 'grel sort', 'grel join']
+---
+
+Arrays in GREL are ordered lists of values that can contain any mix of types. They are produced by splitting strings, parsing JSON, or by using array construction functions. Most array functions also work on JSON `ArrayNode` objects and Java `List` objects. Array indices are zero-based, and negative indices count from the end.
+
+## Creating arrays
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `array` | `a1, a2, ...` | array | Constructs an array from its arguments. Also callable as `makeArray`. |
+| `range` | see [String functions](/dev/grel/string-functions#range) | array | Generates a numeric sequence array |
+
+```text
+array("a", "b", "c")        // ["a","b","c"]
+range(1, 4)                  // [1,2,3]
+```
+
+You can also produce arrays from string operations:
+
+```text
+"a,b,c".split(",")           // ["a","b","c"]
+value.match(/(\w+)\s+(\w+)/) // [group1, group2]
+```
+
+## Querying arrays
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `length` | `array a or string s` | number | Returns the number of elements in an array, or the number of characters in a string |
+| `get` | `o, number from, optional number to` | depends | Returns element at index `from`, or a sub-array from `from` to `to` (exclusive). Negative indices count from end. |
+| `slice` | `array a or string s, number from, optional number to` | array or string | Returns a sub-array from `from` up to (not including) `to`. Like `get` for arrays. |
+| `inArray` | `array a, string s` | boolean | Returns `true` if `s` is an element of `a`; does not coerce types |
+
+```text
+["a","b","c"].length()       // 3
+["a","b","c"].get(1)         // "b"
+["a","b","c"].get(1, 3)      // ["b","c"]
+["a","b","c"].slice(1)       // ["b","c"]
+["a","b","c"].inArray("b")   // true
+["a","b","c"].inArray("x")   // false
+```
+
+## Reordering and deduplication
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `reverse` | `array a` | array | Returns `a` with elements in reversed order |
+| `sort` | `array a of uniform type` | array | Sorts elements in ascending order (case-sensitive, uppercase before lowercase) |
+| `uniques` | `array a` | array | Returns `a` with duplicate values removed, preserving insertion order (case-sensitive) |
+
+```text
+["c","a","b"].sort()         // ["a","b","c"]
+["B","a","C"].sort()         // ["B","C","a"]
+[3,1,2].sort()               // [1,2,3]
+["a","b","a","c"].uniques()  // ["a","b","c"]
+["a","b","c"].reverse()      // ["c","b","a"]
+```
+
+## Combining arrays
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `join` | `array a, string sep` | string | Joins all elements of `a` into a single string using `sep` as the separator. Skips null elements. |
+| `zip` | `array a, array b, ...` | array of arrays | Combines two or more arrays element-by-element. Stops at the shortest array. |
+
+```text
+["a","b","c"].join(", ")     // "a, b, c"
+["a","b","c"].join("|")      // "a|b|c"
+zip([1,2,3], ["a","b","c"])  // [[1,"a"],[2,"b"],[3,"c"]]
+zip([1,2], ["a","b"], [true,false])  // [[1,"a",true],[2,"b",false]]
+```
+
+## Transforming arrays
+
+GREL provides control structures for mapping and filtering arrays. These take a variable name and an expression, not a function reference.
+
+### `forEach`
+
+Iterates over each element of an array, binding the element to a variable, evaluating an expression, and collecting the results into a new array.
+
+```text
+forEach(array, v, expression)
+```
+
+```text
+forEach(["a","b","c"], v, v.toUppercase())     // ["A","B","C"]
+forEach(value.split(","), v, v.trim())
+forEach([1,2,3], v, v * v)                     // [1,4,9]
+```
+
+### `forEachIndex`
+
+Like `forEach`, but also provides the current index (or key for objects).
+
+```text
+forEachIndex(array, i, v, expression)
+```
+
+```text
+forEachIndex(["x","y","z"], i, v, i + ": " + v)
+// ["0: x","1: y","2: z"]
+```
+
+For JSON objects, `i` is bound to the key string and `v` to the value.
+
+### `filter`
+
+Returns only the elements for which the test expression evaluates to `true`.
+
+```text
+filter(array, v, test)
+```
+
+```text
+filter(["a","","b",""], v, v.length() > 0)     // ["a","b"]
+filter([1,2,3,4,5], v, v > 2)                  // [3,4,5]
+```
+
+### `with`
+
+Binds the result of evaluating `value` to a variable, then evaluates `expression` in that context. Useful for caching a computed value to avoid re-evaluation.
+
+```text
+with(value, v, expression)
+```
+
+```text
+with(value.split(",").uniques().sort(), v, v.join("|"))
+```
+
+### `forRange`
+
+Generates a sequence of numbers and evaluates an expression for each, collecting results.
+
+```text
+forRange(from, to, step, v, expression)
+```
+
+```text
+forRange(0, 5, 1, i, i * 2)   // [0,2,4,6,8]
+```
+
+## Math on arrays
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `sum` | `array a` | number | Returns the sum of all numeric elements. Ignores non-numeric values. Returns 0 for an empty or all-non-numeric array. |
+
+```text
+[1,2,3,4].sum()              // 10
+[1,"x",3].sum()              // 4
+[].sum()                     // 0
+```
+
+## Practical examples
+
+**Normalize a multi-value cell (pipe-separated):**
+```text
+forEach(value.split("|"), v, v.trim().toLowercase()).sort().uniques().join("|")
+```
+
+**Count how many values are non-blank after splitting:**
+```text
+filter(value.split(","), v, isNonBlank(v)).length()
+```
+
+**Add a 1-based index prefix to each item:**
+```text
+forEachIndex(value.split("\n"), i, v, (i+1) + ". " + v.trim()).join("\n")
+```
+
+**Check if any value in a split list matches a pattern:**
+```text
+filter(value.split(","), v, v.contains(/^\d+$/)).length() > 0
+```
+
+**Zip two columns together:**
+```text
+forEach(zip(cells["Tags"].value.split(","), cells["Codes"].value.split(",")), pair, pair[0].trim() + ":" + pair[1].trim()).join("; ")
+```

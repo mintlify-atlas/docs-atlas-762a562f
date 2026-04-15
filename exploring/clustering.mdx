@@ -1,0 +1,164 @@
+---
+title: "Clustering Similar Values in OpenRefine Columns"
+description: "Group near-duplicate cell values using key collision and nearest-neighbor algorithms, then merge each cluster into a single canonical form with one click."
+keywords: ["clustering", "near-duplicate", "fingerprint", "levenshtein", "phonetic", "key collision", "knn", "openrefine merge"]
+---
+
+Real-world data rarely uses perfectly consistent values. The same city might appear as `"New York"`, `"new york"`, `"New York City"`, and `"NYC"` across thousands of rows. OpenRefine's clustering feature automatically groups these near-duplicate values so you can merge them into a single canonical form with one click. Clustering does not change your data automatically — you review each proposed cluster and decide which ones to merge and what the merged value should be.
+
+## How clustering works
+
+OpenRefine implements two fundamentally different clustering strategies: **key collision** (called `binning` internally) and **nearest-neighbor** (called `knn`). Both operate on the visible rows only, so you can combine clustering with facets and filters to focus on a subset of your data.
+
+- **Key collision** methods transform each value into a normalized key. Two values that produce the same key are placed in the same cluster. This is fast and scales to very large datasets.
+- **Nearest-neighbor** methods compute a pairwise distance (or similarity) between every pair of values and cluster those within a given radius. This is more thorough but slower on large datasets.
+
+## Using the clustering dialog
+
+<Steps>
+  <Step title="Open the clustering dialog">
+    Click the arrow next to the column you want to cluster, then choose **Edit cells → Cluster and edit…**. The dialog opens and shows cluster results immediately (or after you click **Cluster** if auto-update is disabled).
+  </Step>
+  <Step title="Select a method and function">
+    Use the **Method** dropdown to switch between **Key Collision** and **Nearest Neighbor**. Then choose a keying function or distance function from the second dropdown. The results update automatically if **auto re-cluster** is checked.
+  </Step>
+  <Step title="Review clusters">
+    Each row in the table represents one cluster. The **Cluster Values** column lists every distinct variant and its row count. The **New Cell Value** field is pre-filled with the most common variant; edit it to set your preferred canonical value.
+  </Step>
+  <Step title="Select clusters to merge">
+    Check the **Merge?** checkbox on each cluster row you want to apply. Use **Select all** or **Deselect all** to bulk-toggle. Within each cluster, you can also uncheck individual values to exclude them from the merge using the per-value checkboxes.
+  </Step>
+  <Step title="Merge and re-cluster or merge and close">
+    Click **Merge Selected & Re-Cluster** to apply the selected merges and immediately re-run clustering to find remaining variants. Click **Merge Selected & Close** to apply and close the dialog.
+  </Step>
+</Steps>
+
+<Note>
+  The clustering dialog filters results using four built-in facets: **choices in cluster**, **rows in cluster**, **average choice length**, and **variance of choice length**. These sliders let you focus on clusters of a certain size or complexity without switching methods.
+</Note>
+
+## Exporting clusters
+
+Click **Export Clusters** to download a JSON file containing the current cluster data, including the project name, column name, timestamp, method, keying function, and every cluster with its choices. The file is named `clusters_<project>_<column>_<timestamp>.json`.
+
+## Key collision methods
+
+Key collision methods transform each cell value into a normalized key. Values that produce the same key are placed in the same cluster. The algorithm in `BinningClusterer.java` visits every visible row, calls `Keyer.key(value)`, and groups values by their resulting key. Only groups with two or more distinct values are returned as clusters.
+
+<AccordionGroup>
+  <Accordion title="Fingerprint">
+    The default and fastest keying function. Implemented in `FingerprintKeyer.java`.
+
+    The fingerprint key is produced by:
+    1. Trimming leading and trailing whitespace
+    2. Converting to lowercase
+    3. Removing diacritics and folding special characters (e.g., `ß` → `ss`, `æ` → `ae`, `ø` → `oe`)
+    4. Removing all punctuation and control characters
+    5. Splitting on whitespace into tokens
+    6. Sorting tokens alphabetically and removing duplicates
+    7. Joining the sorted unique tokens with a single space
+
+    **Example:** `"Paris, France"` and `"france paris"` both produce the key `france paris`.
+
+    **Best for:** Catching case differences, punctuation variations, and word-order differences in the same language. Start here — it finds the most clusters with the lowest false-positive rate.
+  </Accordion>
+
+  <Accordion title="N-gram fingerprint">
+    Implemented in `NGramFingerprintKeyer.java`. Instead of word tokens, it splits the normalized string into all overlapping character N-grams of a fixed length (default: 2), sorts them, removes duplicates, and concatenates them into a single key.
+
+    The algorithm:
+    1. Applies the same normalization as fingerprint (case fold, strip diacritics, strip punctuation)
+    2. Removes all whitespace and control characters
+    3. Generates all character N-grams of the configured size
+    4. Sorts them and removes duplicates
+    5. Concatenates into a single key string
+
+    **Example (2-gram):** `"paris"` → N-grams `ar`, `is`, `pa`, `ri` → key `arispa ri`.
+
+    **Best for:** Values with character transpositions, insertion, or deletion errors — particularly useful for short identifiers or codes where word order does not apply.
+
+    **Parameter:** Adjust the **N-gram size** slider in the dialog. Smaller values (2) are more permissive; larger values (5–6) are stricter.
+  </Accordion>
+
+  <Accordion title="Metaphone3">
+    Implemented in `Metaphone3Keyer.java`, which wraps the `Metaphone3` class. Metaphone3 is an English phonetic algorithm that encodes words to their approximate pronunciation. Two words that sound alike in English will receive the same Metaphone3 code.
+
+    **Example:** `"Smith"` and `"Smyth"` produce the same code.
+
+    **Best for:** English proper names and words where spelling variants reflect pronunciation (OCR errors, transcription errors, dialectal spellings). Less effective for non-English text.
+  </Accordion>
+
+  <Accordion title="Cologne phonetic">
+    Implemented in `ColognePhoneticKeyer.java` using `org.apache.commons.codec.language.ColognePhonetic`. Cologne Phonetic (Kölner Phonetik) is a phonetic algorithm optimized for German. It encodes each consonant according to German pronunciation rules.
+
+    **Best for:** German-language datasets with name or place variations that arise from phonetic spelling differences. It handles German-specific sounds that Metaphone3 does not model correctly.
+  </Accordion>
+
+  <Accordion title="Beider-Morse">
+    Implemented in `BeiderMorseKeyer.java` using `org.apache.commons.codec.language.bm.BeiderMorseEncoder`. The Beider-Morse Phonetic Matching (BMPM) system was designed for Jewish genealogical research and handles surnames across multiple Slavic, Germanic, and Semitic languages.
+
+    The encoder can return multiple phonetic representations separated by `|`. OpenRefine uses only the first representation as the cluster key.
+
+    **Best for:** Genealogical datasets, Eastern European name variants, and any dataset where the same name has been transliterated from multiple languages or scripts.
+  </Accordion>
+
+  <Accordion title="Daitch-Mokotoff Soundex">
+    Implemented in `DaitchMokotoffKeyer.java` using `org.apache.commons.codec.language.DaitchMokotoffSoundex`. This is a refinement of the original Soundex algorithm, specifically designed to handle Slavic and Yiddish surnames. It produces a 6-digit numeric code.
+
+    **Best for:** Genealogical and historical datasets with Central or Eastern European names, especially when Beider-Morse produces too many false positives.
+  </Accordion>
+</AccordionGroup>
+
+## Nearest-neighbor methods
+
+Nearest-neighbor clustering (`kNNClusterer.java`) computes a distance between every pair of values and groups values within a configurable **radius** of each other. It uses a blocking strategy based on character N-grams to avoid comparing every pair of values directly, which would be prohibitively slow for large datasets.
+
+Two parameters control the behavior:
+
+| Parameter | Default | Description |
+|---|---|---|
+| **Radius** | `1.0` | Maximum distance between two values for them to be placed in the same cluster. Lower values → stricter matching. |
+| **Block chars** (blocking N-gram size) | `6` | Length of the N-grams used to pre-group values before pairwise comparison. Larger values → faster but may miss some pairs. |
+
+<AccordionGroup>
+  <Accordion title="Levenshtein distance">
+    Implemented via `ApacheLevenshteinDistance.java`, which wraps `org.apache.commons.text.similarity.LevenshteinDistance`. The Levenshtein distance is the minimum number of single-character edits (insertions, deletions, substitutions) needed to transform one string into another.
+
+    **Example:** `"colour"` → `"color"` has a Levenshtein distance of 1 (delete `u`).
+
+    **Best for:** Values where the number of character-level edits is small and predictable — typos, OCR errors, or abbreviations.
+
+    **Tip:** Set the radius to `1` or `2` to catch single- or double-character differences. A radius of `0` is equivalent to exact matching.
+  </Accordion>
+
+  <Accordion title="PPM (Prediction by Partial Matching)">
+    Implemented via `VicinoDistance.java`, which wraps `edu.mit.simile.vicino.distances.PPMDistance`. PPM is an information-theoretic distance measure based on the Prediction by Partial Matching compression model. It measures how much context is shared between two strings.
+
+    **Best for:** Longer strings or cases where the overall pattern of characters matters more than the precise number of edits — for example, identifying whether two longer descriptions refer to the same entity. PPM tends to work better than Levenshtein when values differ by large insertions or deletions rather than isolated character edits.
+
+    <Warning>
+      PPM distance computation is significantly slower than Levenshtein. Use it on smaller datasets or after narrowing the row count with facets.
+    </Warning>
+  </Accordion>
+</AccordionGroup>
+
+## Choosing the right method
+
+<CardGroup cols={2}>
+  <Card title="Start with fingerprint" icon="fingerprint">
+    Run fingerprint first on every dataset. It is the fastest method and catches the most obvious inconsistencies: case differences, punctuation, and word-order variations.
+  </Card>
+  <Card title="Follow up with N-gram fingerprint" icon="grip">
+    After fingerprint, try N-gram fingerprint (size 2) to catch character-level transpositions and OCR errors that word-based clustering misses.
+  </Card>
+  <Card title="Use phonetic methods for names" icon="person">
+    For person or place names, try Metaphone3 (English), Cologne Phonetic (German), or Beider-Morse / Daitch-Mokotoff (multilingual / genealogical) to group phonetic variants.
+  </Card>
+  <Card title="Use nearest-neighbor for fuzzy matching" icon="arrows-to-dot">
+    Use Levenshtein when you need fine control over the edit distance threshold. Use PPM for longer strings with structural similarity.
+  </Card>
+</CardGroup>
+
+<Tip>
+  Cluster iteratively. Run fingerprint, merge the safe clusters, then re-run with N-gram fingerprint, then try phonetic methods. Each pass finds a different class of variant. Narrowing your dataset with facets before clustering can also dramatically reduce noise in the results.
+</Tip>

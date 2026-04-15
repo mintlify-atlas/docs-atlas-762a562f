@@ -1,0 +1,248 @@
+---
+title: 'Reconciliation Service API Reference for OpenRefine'
+description: 'How OpenRefine talks to reconciliation services: the manifest, query format, response schema, suggest, preview, and data extension endpoints.'
+keywords: ['reconciliation', 'API', 'service', 'reconciliation service', 'JSONP', 'CORS', 'suggest', 'data extension']
+---
+
+OpenRefine acts as a client to any server that implements the [Reconciliation Service API](https://reconciliation-api.github.io/specs/latest/). Rather than containing its own entity knowledge base, OpenRefine sends cell values to an external HTTP service and displays the candidates it returns. This page documents the protocol OpenRefine uses to communicate with reconciliation services, derived from the client implementation in `StandardReconConfig.java` and the frontend reconciliation manager.
+
+## Service manifest
+
+When you add a reconciliation service, OpenRefine fetches its root URL to discover its capabilities. The service must respond with a JSON manifest (CORS or JSONP are both accepted — OpenRefine tries CORS first, then falls back to JSONP):
+
+```json
+{
+  "name": "My Reconciliation Service",
+  "identifierSpace": "http://example.com/identifier/",
+  "schemaSpace": "http://example.com/schema/",
+  "defaultTypes": [
+    { "id": "/type/person", "name": "Person" },
+    { "id": "/type/organization", "name": "Organization" }
+  ],
+  "view": {
+    "url": "http://example.com/entity/{{id}}"
+  },
+  "suggest": {
+    "type": {
+      "service_url": "http://example.com",
+      "service_path": "/suggest/type"
+    },
+    "property": {
+      "service_url": "http://example.com",
+      "service_path": "/suggest/property"
+    },
+    "entity": {
+      "service_url": "http://example.com",
+      "service_path": "/suggest/entity"
+    }
+  },
+  "preview": {
+    "url": "http://example.com/preview?id={{id}}",
+    "width": 430,
+    "height": 300
+  },
+  "extend": {
+    "propose_properties": {
+      "service_url": "http://example.com",
+      "service_path": "/extend/propose"
+    },
+    "property_settings": []
+  }
+}
+```
+
+`identifierSpace` and `schemaSpace` are URIs that define the namespace of the identifiers and types the service returns. OpenRefine stores these on every recon result so that data can be later exported with proper provenance.
+
+`defaultTypes` lists the entity types the service advertises. OpenRefine uses these to pre-populate the type selector in the reconciliation dialog.
+
+<Note>
+  The `view.url` template is used to build clickable links from matched entity IDs. Replace `{{id}}` with the entity's identifier to form the full URL.
+</Note>
+
+## Adding a custom service
+
+<Steps>
+  <Step title="Open the reconciliation dialog">
+    In the column menu, choose **Reconcile > Start reconciling...**.
+  </Step>
+  <Step title="Add the service">
+    Click **Add Standard Service** and enter the root URL of your service (for example `https://example.com/api`).
+  </Step>
+  <Step title="Verify the connection">
+    OpenRefine fetches the manifest URL. If successful, the service appears in the list and is saved to your preferences under `reconciliation.standardServices`.
+  </Step>
+</Steps>
+
+The Wikidata reconciliation service (`https://wikidata.reconci.link/{lang}/api`) is registered automatically on first launch if no services are already saved.
+
+## Reconciliation queries
+
+OpenRefine batches cell values into a single HTTP POST to the service URL. The request body contains a `queries` parameter whose value is a JSON object. Each key is an arbitrary batch key (OpenRefine uses `q0`, `q1`, …), and each value is a query object.
+
+### Request
+
+```
+POST /api HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+queries={"q0":{"query":"Abraham Lincoln","type":"/people/person","type_strict":"should","limit":3},"q1":{"query":"Marie Curie","type":"/people/person","type_strict":"should","limit":3}}
+```
+
+### Query object fields
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `query` | string | Yes | The cell value to reconcile. |
+| `type` | string | No | Entity type ID to filter candidates. Taken from the type the user selects in the reconciliation dialog. |
+| `type_strict` | string | No | How strictly to enforce the type filter. OpenRefine always sends `"should"` when a type is specified. |
+| `limit` | integer | No | Maximum number of candidates to return. Only sent when non-zero. Defaults to the service's own limit. |
+| `properties` | array | No | Additional column values to improve match quality. See property context below. |
+
+### Property context
+
+When the user maps other columns as additional context in the reconciliation dialog, each mapped column generates a `properties` entry:
+
+```json
+{
+  "query": "Abraham Lincoln",
+  "type": "/people/person",
+  "type_strict": "should",
+  "properties": [
+    { "pid": "P569", "v": "1809-02-12" },
+    { "pid": "P27",  "v": { "id": "Q30", "name": "United States of America" } }
+  ]
+}
+```
+
+Each entry has a `pid` (property ID) and a `v` (value). If the context cell has already been reconciled, `v` is an object with `id` and `name`; otherwise it is the raw cell value.
+
+## Reconciliation response
+
+The service must return a JSON object whose keys match the query batch keys. Each value is an object with a `result` array:
+
+```json
+{
+  "q0": {
+    "result": [
+      {
+        "id": "Q91",
+        "name": "Abraham Lincoln",
+        "type": [{ "id": "/people/person", "name": "Person" }],
+        "score": 100,
+        "match": true
+      },
+      {
+        "id": "Q48513",
+        "name": "Lincoln (film)",
+        "type": [{ "id": "/film/film", "name": "Film" }],
+        "score": 42,
+        "match": false
+      }
+    ]
+  },
+  "q1": {
+    "result": [
+      {
+        "id": "Q7186",
+        "name": "Marie Curie",
+        "type": [{ "id": "/people/person", "name": "Person" }],
+        "score": 100,
+        "match": true
+      }
+    ]
+  }
+}
+```
+
+### Result object fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | Unique identifier for the entity within `identifierSpace`. |
+| `name` | string | Human-readable label for the entity. |
+| `type` | array | List of type objects with `id` and `name`. |
+| `score` | number | Relevance score. OpenRefine sorts candidates by descending score. |
+| `match` | boolean | `true` if the service considers this a confident match. When `autoMatch` is enabled and `match` is `true` for the top result, OpenRefine automatically accepts it without user review. |
+
+<Warning>
+  If the response is missing a key for a batch query (e.g. `q0` is absent) or the `result` array is missing, OpenRefine records an error judgment for that cell rather than crashing.
+</Warning>
+
+## Suggest endpoint
+
+The `/suggest` endpoint powers autocomplete in the reconciliation dialog's type and property selectors. OpenRefine passes the old-style Suggest API options from `this._service.suggest.type` and `this._service.suggest.property`:
+
+```
+GET /suggest/type?prefix=per HTTP/1.1
+```
+
+```json
+{
+  "result": [
+    { "id": "/people/person", "name": "Person", "description": "A human being" }
+  ]
+}
+```
+
+The `service_url` and `service_path` fields in the manifest tell OpenRefine where to send autocomplete queries. The query parameter name is `prefix`.
+
+## Preview endpoint
+
+The `preview` endpoint returns an HTML snippet shown when a user hovers over a candidate entity. OpenRefine substitutes the entity ID into the `view.url` template from the manifest to generate the hover URL.
+
+The service should return a self-contained HTML page (or fragment) at the configured preview URL. OpenRefine renders it in an iframe using the `width` and `height` dimensions from the manifest.
+
+## Data extension endpoint
+
+The `/extend` endpoint lets users fetch additional properties for already-reconciled cells using **Edit column > Add columns from reconciled values**. OpenRefine sends a POST request with the entity IDs and requested properties:
+
+```json
+{
+  "ids": ["Q91", "Q7186"],
+  "properties": [
+    { "id": "P569" },
+    { "id": "P27" }
+  ]
+}
+```
+
+The service responds with a `rows` object keyed by entity ID, and a `meta` array describing the returned properties:
+
+```json
+{
+  "rows": {
+    "Q91": {
+      "P569": [{ "date": "1809-02-12" }],
+      "P27": [{ "id": "Q30", "name": "United States of America" }]
+    },
+    "Q7186": {
+      "P569": [{ "date": "1867-11-07" }],
+      "P27": [{ "id": "Q142", "name": "France" }]
+    }
+  },
+  "meta": [
+    { "id": "P569", "name": "date of birth", "type": { "id": "/type/datetime", "name": "Date/Time" } },
+    { "id": "P27",  "name": "country of citizenship", "type": { "id": "/type/entity", "name": "Entity" } }
+  ]
+}
+```
+
+The `propose_properties` sub-endpoint (`service_url` + `service_path` from the manifest) suggests which properties are available for a given type, driving the property picker in the data extension dialog.
+
+## Batch size
+
+OpenRefine sends reconciliation requests in batches. The default batch size is 10. Services can advertise a preferred batch size via the `batchSize` field in their manifest, and users can override it in the reconciliation dialog config. The effective batch size is calculated as:
+
+```
+min(max(rowCount / 10, 10), advertisedBatchSize)
+```
+
+where `rowCount` is the number of rows in the project.
+
+## CORS and JSONP
+
+OpenRefine first attempts a plain CORS request to the service manifest URL. If that fails, it retries with JSONP. The detected access mode (`"json"` or `"jsonp"`) is stored with the service registration and used for all subsequent requests to that service.
+
+<Tip>
+  For new services, prefer CORS. JSONP support is maintained for backward compatibility with older services.
+</Tip>

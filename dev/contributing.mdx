@@ -1,0 +1,169 @@
+---
+title: 'Contributing to OpenRefine: Code, Docs, and Community'
+description: 'How to report bugs, submit pull requests, translate the UI, improve documentation, and join OpenRefine community governance as a contributor.'
+keywords: ['contributing', 'pull request', 'development', 'governance', 'code of conduct', 'community']
+---
+
+OpenRefine is a meritocratic, consensus-based community project. Anyone can contribute — whether that means answering questions on the forum, fixing a typo in the docs, translating the interface, or submitting a code patch. All contributions are made in public and reviewed before merging, including those from core developers.
+
+## Ways to contribute
+
+<CardGroup cols={2}>
+  <Card title="Peer support" icon="comments">
+    Answer questions on the [OpenRefine forum](https://forum.openrefine.org/). If a discussion surfaces a bug or a new feature request, the next step is opening an issue on the tracker.
+  </Card>
+  <Card title="Translations" icon="language">
+    Translate the UI into languages you speak fluently via [Weblate](https://hosted.weblate.org/engage/openrefine/). Spanish, Brazilian Portuguese, and French all need work.
+  </Card>
+  <Card title="Documentation" icon="book">
+    Use the edit button on any [user manual](https://openrefine.org/docs/) page to suggest improvements. For large changes, discuss on the forum first, then [prepare your changes locally](https://openrefine.org/docs/technical-reference/documentation-contributions).
+  </Card>
+  <Card title="Code" icon="code">
+    Fix bugs, add features, improve test coverage, or develop an extension or reconciliation service. See the [first code contribution guide](https://openrefine.org/docs/technical-reference/code-contributions) to get started.
+  </Card>
+</CardGroup>
+
+## Setting up the development environment
+
+<Steps>
+  <Step title="Fork and clone the repository">
+    Fork the repository on GitHub, then clone your fork:
+
+    ```bash
+    git clone https://github.com/YOUR_USERNAME/OpenRefine.git
+    cd OpenRefine
+    ```
+  </Step>
+  <Step title="Build the project">
+    OpenRefine uses Maven as its build system. Build with:
+
+    ```bash
+    ./refine build
+    ```
+
+    This compiles the Java backend and bundles the frontend assets.
+  </Step>
+  <Step title="Run the application">
+    Start OpenRefine locally:
+
+    ```bash
+    ./refine start
+    ```
+
+    OpenRefine will be available at `http://localhost:3333`.
+  </Step>
+</Steps>
+
+<Note>
+  Java 11 or higher is required. Maven is bundled via the `./refine` wrapper script, so you do not need to install it separately.
+</Note>
+
+## Running tests
+
+Run the full test suite before submitting a pull request:
+
+```bash
+./refine test
+```
+
+Make sure all tests are green. CI will fail if any test is broken.
+
+## Linting
+
+OpenRefine enforces code style checks via CI. Run the linter locally before submitting:
+
+```bash
+./refine lint
+```
+
+CI will fail if lint fails, so it is faster to catch issues locally.
+
+## Pull request process
+
+All code changes go through GitHub pull requests — there are no direct commits to `master`, even for core developers.
+
+<Steps>
+  <Step title="Find or open an issue">
+    Check the [issue tracker](https://github.com/OpenRefine/OpenRefine/issues) before starting. Look for [Good First Issues](https://github.com/OpenRefine/OpenRefine/issues?q=is%3Aopen+is%3Aissue+label%3A%22Good+First+Issue%22) if you want a well-scoped starting point. The development team works primarily from the tracker — anything not there risks getting lost.
+  </Step>
+  <Step title="Create a branch">
+    Name the branch after the issue number and a brief description, for example `1234-fix-csv-import`.
+  </Step>
+  <Step title="Make your changes">
+    Avoid bundling unrelated changes into the same PR. Write unit and/or end-to-end tests that cover the fix or feature.
+  </Step>
+  <Step title="Lint and test">
+    Run `./refine lint` and `./refine test`. Both must pass before you open the PR.
+  </Step>
+  <Step title="Open the pull request">
+    Push your branch and open a PR against `master`. Reference the related issue in the PR description.
+  </Step>
+</Steps>
+
+## Code review expectations
+
+<Warning>
+  Pull requests are reviewed before merging. Review times vary — the team prioritizes reviews but please be patient. Addressing reviewer feedback promptly keeps PRs moving.
+</Warning>
+
+Reviewers may ask you to:
+
+- Add or adjust tests
+- Refactor for clarity
+- Address edge cases
+- Update documentation
+
+All review discussion happens publicly on the pull request.
+
+## Extensions
+
+OpenRefine supports a plugin architecture. If you want to add new functionality without modifying the core, write an extension. See the [extension documentation](https://openrefine.org/docs/technical-reference/writing-extensions) for the full guide.
+
+To have your extension listed on [openrefine.org/extensions](https://openrefine.org/extensions), submit a pull request to [this file](https://github.com/OpenRefine/openrefine.org/blob/master/src/pages/extensions.md).
+
+## Community
+
+| Channel | Purpose |
+|---|---|
+| [Forum — Support](https://forum.openrefine.org/) | User questions and peer support |
+| [Forum — Dev](https://forum.openrefine.org/c/dev/8) | Technical discussions, new features, code questions |
+| [Issue tracker](https://github.com/OpenRefine/OpenRefine/issues) | Bug reports and feature requests |
+| [Gitter / Matrix](https://gitter.im/OpenRefine/OpenRefine) | Informal chat (only occasionally monitored) |
+
+<Tip>
+  Share new feature ideas on the developer forum before writing code. Someone may be able to point you at existing work and save you hours of research.
+</Tip>
+
+## Governance model
+
+OpenRefine uses an Apache-style meritocratic governance model. Decision-making is public and consensus-driven.
+
+<AccordionGroup>
+  <Accordion title="Users">
+    Anyone who uses OpenRefine. Users shape the project by providing feedback, writing tutorials, and advocating for the project.
+  </Accordion>
+  <Accordion title="Contributors">
+    Users who actively participate — submitting patches, supporting others on the forum, maintaining documentation, or helping design the UI. Anyone can become a contributor.
+  </Accordion>
+  <Accordion title="Committers">
+    Regular contributors who have earned community trust. Committers can triage issues and pull requests, create branches directly, review PRs, and run CI pipelines automatically. New committers are elected by existing committers on the developer forum using the `[VOTE]` convention. The current list is available at [github.com/orgs/OpenRefine/people](https://github.com/orgs/OpenRefine/people).
+  </Accordion>
+  <Accordion title="Core Developer Group">
+    Trusted developers responsible for the long-term technical direction. Core developers merge pull requests, publish releases, review security reports, and administer the GitHub organization. New members must first be Committers and are elected by existing Core Developers. Current members: Tom Morris ([@tfmorris](https://github.com/tfmorris)) and Albin Larsson ([@Abbe98](https://github.com/Abbe98)).
+  </Accordion>
+  <Accordion title="Advisory Committee">
+    Manages the administrative and financial aspects of the project with fiscal sponsor [Code for Science & Society](https://codeforscience.org/). Current members: Jan Ainali, Julie Faure-Lacroix, and Esther Jackson.
+  </Accordion>
+</AccordionGroup>
+
+Voting for new Committers, Core Developers, or Code of Conduct Committee members is conducted on the developer forum. Start a thread with the subject prefix `[VOTE]` and the `election` tag. Voting is open for seven days. Votes are expressed as `+1` (yes), `0` (no objection), or `-1` (opposed, must be explained).
+
+For the complete governance policy — including funding applications, conflict of interest rules, and Advisory Committee responsibilities — see [GOVERNANCE.md](https://github.com/OpenRefine/OpenRefine/blob/master/GOVERNANCE.md).
+
+## Code of conduct
+
+All participants in OpenRefine spaces are expected to follow the [Code of Conduct](https://github.com/OpenRefine/OpenRefine/blob/master/CODE_OF_CONDUCT.md), which applies in all project spaces and when representing the project publicly.
+
+Expected behavior includes using welcoming and inclusive language, being respectful of differing viewpoints, gracefully accepting constructive criticism, and showing empathy towards other community members.
+
+To report a Code of Conduct violation, contact the Code of Conduct Committee at **code-of-conduct@openrefine.org**. All reports are kept confidential.

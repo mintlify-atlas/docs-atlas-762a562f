@@ -1,0 +1,169 @@
+---
+title: "Reconciling against Wikidata and uploading edits"
+description: "Use OpenRefine's built-in Wikidata service to match your data against Wikidata items, then upload new statements and items using the Wikibase extension."
+keywords: ["wikidata", "wikibase", "reconciliation", "Q-items", "schema editor", "upload edits", "QuickStatements", "login"]
+---
+
+OpenRefine includes a built-in reconciliation service for [Wikidata](https://www.wikidata.org), the free, collaborative knowledge base maintained by the Wikimedia Foundation. The service is automatically registered the first time you open the reconciliation dialog, so you can start matching your data against Wikidata items without any setup. Beyond reconciliation, the bundled Wikibase extension lets you define a schema describing what statements to add, preview the planned edits, and upload them directly to Wikidata from within OpenRefine.
+
+## Reconciling against Wikidata
+
+### Starting a Wikidata reconciliation
+
+<Steps>
+  <Step title="Open the reconcile dialog">
+    Click the column menu on the column you want to reconcile, then choose **Reconcile → Start reconciling**.
+  </Step>
+  <Step title="Select the Wikidata service">
+    The Wikidata reconciliation service appears in the list as **Wikidata reconci.link** (or a similar name depending on your language setting). Select it and click **Next**.
+  </Step>
+  <Step title="Choose an entity type">
+    OpenRefine samples the column to suggest likely entity types. For example, if your column contains city names, it may suggest **city (Q515)**. You can accept the suggestion, search for a different type by name or Q-number, or leave the type unset to search across all Wikidata items.
+  </Step>
+  <Step title="Add context properties (optional)">
+    Map other columns to Wikidata properties to narrow matches. For instance, map a "Country" column to **country (P17)** to help distinguish cities with identical names in different countries.
+  </Step>
+  <Step title="Start reconciling">
+    Click **Start Reconciling**. OpenRefine sends batches of queries to the reconciliation service. Progress is shown in the process panel. When complete, the column cells display candidate matches.
+  </Step>
+</Steps>
+
+### Selecting entity types (Q-items)
+
+Wikidata items are identified by Q-numbers (Q-items). Every item belongs to one or more types, expressed as values of the **instance of (P31)** property. When you select a type in the reconciliation dialog, OpenRefine sends the type's Q-number in each query, and the service returns candidates that are instances of that type.
+
+<Tip>
+  If you are unsure of the right type, leave the type field empty for a first pass. After reviewing the results, add a type facet to check which types the service returned and refine from there.
+</Tip>
+
+### Using properties to narrow matches
+
+The reconciliation service supports sending additional property values alongside the text query. Each property is identified by its P-number (e.g., **P569** for date of birth). When you map a column to a property in the reconciliation dialog:
+
+- If the mapped column contains plain text, that text is sent as the property value.
+- If the mapped column is already reconciled, OpenRefine sends the matched entity's Q-number instead, giving the service a precise structured value.
+
+For example, reconciling a list of politicians becomes significantly more accurate when you also send the country they represent or the party they belong to.
+
+## The Wikibase extension
+
+The Wikibase extension ships with OpenRefine and adds a **Wikibase** tab to the project interface. It allows you to:
+
+- Log in to Wikidata (or another Wikibase instance) using a username/password or an OAuth owner-only consumer.
+- Define a schema mapping your dataset columns to Wikidata statements.
+- Preview what edits would be created.
+- Perform the edits on Wikidata.
+- Export a QuickStatements-compatible file instead of uploading directly.
+
+### Logging in to Wikidata
+
+<Steps>
+  <Step title="Open the Wikibase tab">
+    Click the **Wikibase** tab in the project header. If you are not logged in, the tab shows a login form.
+  </Step>
+  <Step title="Enter your credentials">
+    You can log in with:
+
+    - **Username and password** — your regular Wikidata account credentials.
+    - **Owner-only OAuth consumer** — a consumer token, consumer secret, access token, and access secret generated in your Wikidata preferences under **OAuth consumer registrations**.
+
+    Check **Remember credentials** to store them in a browser cookie so you do not need to re-enter them next time.
+  </Step>
+  <Step title="Confirm login">
+    After submitting, the tab shows your logged-in username. You can log out at any time from the same panel.
+  </Step>
+</Steps>
+
+<Warning>
+  Credentials are stored in browser cookies on your local machine, not on any remote server. The cookie expires after one year. Use an OAuth consumer if you prefer not to store your password in a cookie.
+</Warning>
+
+### Defining a schema
+
+The schema editor tells OpenRefine which statements to add to which items. Open the schema editor from the **Wikibase** tab by clicking **Edit schema**.
+
+The schema maps:
+
+- **Items** — each row in your dataset represents an item, either an existing Wikidata item (matched via reconciliation) or a new item to be created.
+- **Statements** — property-value pairs to add to each item. Values can come from columns in your dataset (reconciled or plain text), fixed values, or other expressions.
+- **Qualifiers and references** — additional property-value pairs attached to individual statements.
+
+<AccordionGroup>
+  <Accordion title="Adding a statement">
+    1. In the schema editor, click **Add property** under the item you want to add statements to.
+    2. Search for the property by name or P-number (e.g., **country of citizenship (P27)**).
+    3. Select the value source: a column in your dataset, a fixed value, or a Wikidata item.
+    4. If the value column is reconciled, the matched Q-number is used as the statement value.
+  </Accordion>
+  <Accordion title="Creating new items">
+    Rows where the item column is judged as **New** (not matched to an existing Wikidata item) will result in new item creation when you perform the edits. You must add at least a label and an **instance of** statement to satisfy Wikidata's minimum requirements.
+  </Accordion>
+  <Accordion title="Validating the schema">
+    OpenRefine validates the schema when you save it. If required fields are missing or values are incompatible with the expected data types, it returns a list of validation errors you must resolve before proceeding.
+  </Accordion>
+</AccordionGroup>
+
+### Previewing edits
+
+Before uploading anything, use the preview to inspect what OpenRefine will send to Wikidata.
+
+<Steps>
+  <Step title="Click Preview">
+    In the **Wikibase** tab, click **Preview**. OpenRefine evaluates the schema against your dataset and generates a list of planned entity edits.
+  </Step>
+  <Step title="Review warnings">
+    The preview shows QA warnings for potential issues, such as duplicate statements, missing labels, or values that conflict with Wikidata's constraints. Warnings are categorized by severity.
+  </Step>
+  <Step title="Inspect the first edits">
+    The preview displays the first ten edits in detail so you can confirm the mapping looks correct. The total number of planned edits is also shown.
+  </Step>
+</Steps>
+
+### Performing edits on Wikidata
+
+Once you are satisfied with the preview, you can upload the edits.
+
+<Steps>
+  <Step title="Open the upload dialog">
+    In the **Wikibase** tab, click **Perform edits**.
+  </Step>
+  <Step title="Set the edit summary">
+    Enter a short description of the edit batch (e.g., "Adding birth dates from census data"). This appears in the Wikidata edit history.
+  </Step>
+  <Step title="Configure rate limiting">
+    Set the **maximum lag** (default 5 seconds) to avoid overwhelming the Wikidata servers. You can also set a maximum number of edits per minute. OpenRefine respects these limits while uploading.
+  </Step>
+  <Step title="Confirm and upload">
+    Click **Perform edits**. OpenRefine uploads each edit to the Wikidata API. A results column is added to your project showing the outcome of each row's edit (success, error, or skipped).
+  </Step>
+</Steps>
+
+<Warning>
+  Edits made to Wikidata are live and immediately visible to other users. Always preview carefully and consider testing with a small sample or on a Wikibase sandbox instance before uploading large batches.
+</Warning>
+
+### Exporting as QuickStatements
+
+If you prefer to review or stage edits before uploading, you can export a QuickStatements-compatible file instead.
+
+From the **Wikibase** tab, choose **Export to QuickStatements**. The exported file contains one statement per line in the V1 QuickStatements format. You can paste this into the [QuickStatements tool](https://quickstatements.toolforge.org) to run the edits manually.
+
+<Note>
+  QuickStatements export does not require you to be logged in to Wikidata from within OpenRefine.
+</Note>
+
+## Privacy and credentials
+
+<AccordionGroup>
+  <Accordion title="Where credentials are stored">
+    Login credentials are stored as cookies in your browser with a one-year expiry. Cookie keys are scoped to the MediaWiki API endpoint, so credentials for different Wikibase instances (e.g., Wikidata and a local Wikibase) are stored separately and do not interfere with each other.
+
+    Previously, credentials were stored in OpenRefine's preference store, which is insecure. If you have an older installation, OpenRefine deletes those stored credentials on upgrade.
+  </Accordion>
+  <Accordion title="OAuth vs username/password">
+    OAuth owner-only consumers are the preferred authentication method because they do not require you to store your password. You generate the four OAuth tokens in your Wikidata account settings under **Manage OAuth consumers**, then enter them in the OpenRefine login form. OAuth tokens can be revoked from your Wikidata account at any time without changing your password.
+  </Accordion>
+  <Accordion title="Connecting to a different Wikibase instance">
+    The Wikibase extension is not limited to Wikidata. You can point it at any Wikibase instance by entering that instance's MediaWiki API endpoint URL in the login dialog. This allows you to upload edits to a private or community Wikibase installation using the same workflow.
+  </Accordion>
+</AccordionGroup>

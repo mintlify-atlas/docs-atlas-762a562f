@@ -1,0 +1,231 @@
+---
+title: "File Formats Supported for Import into OpenRefine"
+description: "Full reference of every file format OpenRefine can import, including CSV, TSV, Excel, ODS, JSON, XML, RDF variants, Wikitext, MARC, and fixed-width files."
+keywords: ["openrefine formats", "csv import", "excel import", "json import", "xml import", "rdf import", "wikitext", "marc", "fixed-width", "ods"]
+---
+
+OpenRefine ships with built-in importers for a wide range of file formats. Each importer is responsible for parsing a specific format and mapping it to OpenRefine's internal row-and-column model. Some formats (such as JSON, XML, and RDF) require you to select which part of the document maps to rows; others (such as CSV and Excel) parse directly into a flat table. The sections below describe every built-in format and its import options.
+
+<Note>
+  Additional formats are available through extensions. The **Database** extension (bundled with OpenRefine) lets you import data from relational databases over JDBC. The **PC-Axis** format, used by Nordic statistical agencies, is available as a community extension.
+</Note>
+
+## Separator-based text files
+
+<AccordionGroup>
+  <Accordion title="CSV — Comma-Separated Values">
+    **Extensions:** `.csv`
+
+    OpenRefine uses the `SeparatorBasedImporter` with a comma (`,`) as the default delimiter. The importer auto-detects the separator by sampling up to 100 lines of the file and comparing candidate characters statistically. If auto-detection disagrees with the built-in guesser, OpenRefine uses its own result for backward compatibility.
+
+    **Key import options:**
+
+    | Option | Default | Description |
+    |---|---|---|
+    | Separator | `,` | The character used to split columns. You can type any single character or a Java escape sequence such as `\t` for tab. |
+    | Process quote marks | On | When enabled, double-quote characters delimit fields that may contain the separator or newlines. The quote character is configurable. |
+    | Quote character | `"` | The character that delimits quoted fields. Only active when **Process quote marks** is on. |
+    | Trim strings | On | Strip leading and trailing whitespace from cell values. |
+    | Guess cell value types | Off | Attempt to parse cell values as numbers, dates, or booleans. When off, all values are imported as strings. |
+
+    <Tip>
+      If your CSV file contains embedded newlines inside quoted fields, leave **Process quote marks** enabled. Disabling it treats every physical line as a separate row.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="TSV — Tab-Separated Values">
+    **Extensions:** `.tsv`
+
+    TSV files use a tab character (`\t`) as the separator. The `SeparatorBasedImporter` detects a tab separator and automatically disables quote processing, because standard TSV does not use quoting. You can re-enable quote processing and set a custom quote character if your specific TSV variant requires it.
+
+    The same column-naming, encoding, header-line, and skip-line options available for CSV also apply to TSV.
+  </Accordion>
+
+  <Accordion title="Custom separator">
+    **Extensions:** any text file (`.txt`, `.dat`, `.log`, etc.)
+
+    When a file does not have a recognised extension, or when you need a separator other than comma or tab, choose **Custom** in the separator radio group and type any character or escape sequence. Common choices include pipe (`|`), semicolon (`;`), and caret (`^`). The importer supports Java escape sequences, so `\t`, `\n`, and `\\` are valid inputs.
+
+    The importer supports up to 16,384 columns and up to 1 MB of content per cell.
+  </Accordion>
+</AccordionGroup>
+
+## Spreadsheet formats
+
+<AccordionGroup>
+  <Accordion title="Excel — .xls and .xlsx">
+    **Extensions:** `.xls`, `.xlsx`
+
+    The `ExcelImporter` uses Apache POI to read both legacy binary Excel (`.xls`, HSSF) and modern XML-based Excel (`.xlsx`, XSSF) workbooks. OpenRefine detects the format automatically from the file's magic bytes, so the correct parser is selected regardless of the file extension.
+
+    A workbook may contain multiple sheets. OpenRefine lists every sheet and its row count in the import panel. Sheets with more than one row are selected by default; empty sheets are deselected. You can check or uncheck individual sheets. When multiple sheets are imported, they are concatenated into a single project.
+
+    **Cell type handling:**
+
+    | Excel type | Imported as |
+    |---|---|
+    | Boolean | Boolean (`true`/`false`) |
+    | Integer number | Long integer |
+    | Decimal number | Double (floating-point) |
+    | Datetime (format includes date + time) | OpenRefine date/time value |
+    | Date-only, time-only, interval | String (formatted by Excel's `DataFormatter`) |
+    | Formula | The cached result of the formula (same type as above) |
+    | Error or blank | Null |
+    | Text | String |
+
+    **Force text** is an optional setting that uses `DataFormatter` to format every cell as a string, reproducing exactly what Excel would display. This is useful when you need to preserve number formatting such as leading zeros or currency symbols.
+
+    <Warning>
+      Only Excel 97 and later formats are supported. Older `.xls` files created by non-Microsoft applications may fail to parse. If you encounter an error, try opening the file in Excel and saving it as a newer `.xlsx` format.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="ODS — OpenDocument Spreadsheet">
+    **Extensions:** `.ods`
+
+    The `OdsImporter` reads OpenDocument Spreadsheet files (the format used by LibreOffice Calc and Apache OpenOffice) using the ODF Toolkit library. Like the Excel importer, it lists all sheets and lets you choose which to include.
+
+    **Cell type handling:**
+
+    | ODS value type | Imported as |
+    |---|---|
+    | `boolean` | Boolean |
+    | `float` | Double |
+    | `date` | OpenRefine date/time value |
+    | `currency` | Double (currency value) |
+    | `percentage` | Double (raw percentage value) |
+    | `string` | String |
+    | `null` type with display text | String (with a warning logged) |
+
+    <Note>
+      If the ODS file has no tables, the import fails with a message suggesting you validate the file at [odfvalidator.org](https://odfvalidator.org/) before retrying.
+    </Note>
+  </Accordion>
+</AccordionGroup>
+
+## Hierarchical / semi-structured formats
+
+<AccordionGroup>
+  <Accordion title="JSON">
+    **Extensions:** `.json`
+
+    The `JsonImporter` parses JSON using Jackson's streaming API. Because JSON can have arbitrary nesting, OpenRefine does not flatten the document automatically. Instead, it shows a tree preview of up to 1,000 tokens and asks you to click the element that represents one row of your intended table. All array elements at that level become rows, and nested keys become columns.
+
+    The importer tolerates Java-style `//` and `/* */` comments and YAML-style `#` comments in JSON files, which are technically invalid JSON but commonly appear in configuration data and some APIs.
+
+    Inner arrays nested beneath the chosen row element are expanded into multiple sub-rows, which is typically where you will want to use **Record mode** after the project is created.
+  </Accordion>
+
+  <Accordion title="XML">
+    **Extensions:** `.xml`
+
+    The `XmlImporter` uses Java's `XMLStreamReader` (StAX) for efficient streaming parsing. As with JSON, you select the repeating element that should become a row by clicking on it in the tree preview. Attributes of the selected element and its children become columns.
+
+    The importer coalesces adjacent text nodes, resolves entity references, and skips DTD processing. It strips any non-XML prefix bytes (up to 100 bytes of leading garbage) before parsing begins.
+
+    XML namespaces are preserved: the local name becomes the column name, and the namespace URI is stored alongside it.
+  </Accordion>
+</AccordionGroup>
+
+## RDF and linked-data formats
+
+All RDF importers share the same core logic in `RdfTripleImporter`, which uses Apache Jena to parse the input into an in-memory model. Each unique subject URI becomes one row, with a `subject` column as the key column. Predicate URIs become column headers. When a subject has multiple values for the same predicate, they are placed on additional sub-rows below the primary row, making record mode appropriate for RDF imports.
+
+<AccordionGroup>
+  <Accordion title="N-Triples">
+    **Extensions:** `.nt`
+
+    Parsed using Jena's `NT` language. N-Triples is a line-based, one-triple-per-line format and is the fastest RDF format to parse.
+  </Accordion>
+
+  <Accordion title="N3 (Notation3)">
+    **Extensions:** `.n3`
+
+    Parsed using Jena's `N3` language. N3 is a superset of Turtle and supports additional features such as universally quantified variables.
+  </Accordion>
+
+  <Accordion title="Turtle">
+    **Extensions:** `.ttl`
+
+    Parsed using Jena's `TTL` language. Turtle is a compact, human-readable RDF serialisation that is widely used for publishing linked data.
+  </Accordion>
+
+  <Accordion title="JSON-LD">
+    **Extensions:** `.jsonld`
+
+    Handled by `RdfJsonldTripleImporter`, which invokes Jena with the `JSON-LD` language tag. The document is read as an RDF graph and the same subject-per-row mapping applies.
+  </Accordion>
+
+  <Accordion title="RDF/XML">
+    **Extensions:** `.rdf`
+
+    Handled by `RdfXmlTripleImporter`, which uses Jena's default XML parser. RDF/XML is the oldest RDF serialisation and is commonly produced by ontology editors and legacy tools.
+  </Accordion>
+</AccordionGroup>
+
+## Wikitext
+
+**Extensions:** `.wiki`, `.wikitext`
+
+The `WikitextImporter` uses the Sweble Wikitext parser to extract tables from MediaWiki markup. It finds all `{| … |}` wikitext tables and imports each one in sequence into the project.
+
+**Key import options:**
+
+| Option | Default | Description |
+|---|---|---|
+| Blank spanning cells | On | Cells covered by `rowspan` or `colspan` attributes are left blank. When off, the value of the spanning cell is duplicated into every cell it covers. |
+| Include raw templates | Off | When off, template calls (`{{…}}`) inside table cells are suppressed. Enable this to keep template syntax as literal text. |
+| Wiki URL | `https://en.wikipedia.org/wiki/` | The base URL used to construct links for internal wiki links found in cells. Used during automatic reconciliation. |
+| Parse references | On | Detect `<ref>` tags inside cells and extract the first URL found in each reference into a separate `_ref` column. |
+
+When a cell contains exactly one internal wikilink (`[[…]]`), the importer automatically reconciles it against the Wikidata reconciliation service (`https://wikidata.reconci.link/en/api`) using the constructed wiki URL as the item identifier. The reconciliation happens at import time, before the project is created.
+
+## MARC (Machine-Readable Cataloging)
+
+**Extensions:** `.mrc`, `.marc`
+
+The `MarcImporter` reads MARC 21 binary records using the marc4j library with permissive parsing enabled. It converts each MARC record to MARC/XML in a temporary file, then hands off to the `XmlImporter` for the final tree-to-table conversion. This means you select the repeating XML element in the same way as a regular XML import.
+
+<Note>
+  MARC files use a binary format. If the conversion to MARC/XML fails (for example because the file is not a valid MARC file), the temporary XML file is deleted and the import stops without producing a project. Verify the file is valid MARC 21 binary before importing.
+</Note>
+
+## Fixed-width text files
+
+**Extensions:** `.txt` (or any extension when explicitly selected)
+
+The `FixedWidthImporter` reads plain-text files where columns are defined by character position rather than a delimiter. OpenRefine automatically guesses column boundaries by scanning up to 100 lines and identifying character positions where a space appears in every line — those positions are treated as column separators.
+
+**Key import options:**
+
+| Option | Default | Description |
+|---|---|---|
+| Column widths | Auto-detected | A comma-separated list of integer widths. Each width defines how many characters wide one column is. |
+| Column names | None | A comma-separated list of column headers. If provided, `headerLines` is set to `1` so the first data row is not consumed as a header. |
+
+Any text remaining after the last defined column width is captured as a residual column.
+
+## Line-based text files
+
+**Extensions:** `.txt`, `.log`, etc.
+
+The `LineBasedImporter` reads text files where each line (or a fixed number of consecutive lines) represents one row. It is suitable for log files, simple lists, and any format where the line itself is the unit of data.
+
+**Key import options:**
+
+| Option | Default | Description |
+|---|---|---|
+| Lines per row | `1` | The number of consecutive lines to combine into a single row. A value of `3` means every three lines become one row with three cells. |
+| Line separator regex | `\r?\n` | The Java regex used to split lines. Accepts any Java regex, so multi-character separators are possible. |
+| Header lines | `0` | Fixed-width and line-based formats default to no header; column names are generated automatically. |
+
+## Extension-provided formats
+
+<CardGroup cols={2}>
+  <Card title="Database (SQL)" icon="database">
+    The bundled **Database** extension adds a **SQL Database** tab to the import dialog. It connects to MySQL, PostgreSQL, MariaDB, Microsoft SQL Server, and any other database with a JDBC driver. You write a SQL query and OpenRefine executes it, mapping the result set to rows and columns.
+  </Card>
+  <Card title="PC-Axis" icon="chart-bar">
+    The **PC-Axis** community extension adds support for the `.px` format used by Nordic national statistics offices (Statistics Sweden, Statistics Finland, and others). Each statistical variable becomes a column, and the cross-product of dimension values becomes the rows.
+  </Card>
+</CardGroup>

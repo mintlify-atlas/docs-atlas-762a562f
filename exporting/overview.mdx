@@ -1,0 +1,210 @@
+---
+title: 'Export Data from OpenRefine: All Supported Formats'
+description: 'Export cleaned project data to CSV, TSV, Excel, ODS, HTML, JSON, SQL, and custom templated formats using the built-in Export menu.'
+keywords: ['export', 'csv', 'tsv', 'excel', 'xlsx', 'ods', 'html', 'sql', 'templating', 'json', 'download']
+---
+
+OpenRefine provides a suite of built-in exporters that let you download your project data in the format best suited for downstream use. Every exporter respects the current facet and filter state of the engine, so only the rows currently visible in the grid are exported by default. You can override this and export all rows regardless of active filters using the **Export all rows** option available in several export dialogs. To access any format, open the **Export** menu in the top-right of the project view and select the desired format or choose **Custom tabular exporter** for full control over column selection and output options.
+
+## Accessing the export menu
+
+Click the **Export** button in the top-right corner of any open project. A dropdown lists all available formats. Selecting a plain format such as **Tab-separated value** or **Comma-separated value** begins the download immediately. Selecting a format with configurable options — **Custom tabular exporter**, **SQL exporter**, or **Templating** — opens a dialog first.
+
+<Note>
+The set of available export formats can be extended by installing OpenRefine extensions. The formats listed here are those registered by the built-in core module.
+</Note>
+
+## Built-in export formats
+
+<Tabs>
+  <Tab title="Tabular">
+    ### Tab-separated values (TSV)
+
+    Exports data as plain text with fields separated by tab characters. The `CsvExporter` class handles this format when the separator is set to `\t`. Column headers are included on the first row by default. No quoting is applied — values that themselves contain tabs are not escaped.
+
+    **File extension:** `.tsv`  
+    **Content type:** `text/plain`
+
+    ### Comma-separated values (CSV)
+
+    Exports data as RFC-compliant CSV using the [univocity-parsers](https://github.com/uniVocity/univocity-parsers) library. The default delimiter is a comma (`,`). Values that contain commas, double quotes, or newlines are automatically quoted. Unquoted values with embedded characters are also escaped when necessary.
+
+    **File extension:** `.csv`  
+    **Content type:** `text/plain`
+
+    **Configurable options (via Custom tabular exporter):**
+
+    | Option | Default | Description |
+    |---|---|---|
+    | `separator` | `,` | Field delimiter character |
+    | `lineSeparator` | `\n` | Line ending sequence |
+    | `quoteAll` | `false` | Force quoting on every field |
+    | `encoding` | `UTF-8` | Output character encoding |
+    | `outputColumnHeaders` | `true` | Include header row |
+    | `outputBlankRows` | `false` | Include rows where all cells are empty |
+
+    ### HTML table
+
+    Produces a complete HTML document containing a `<table>` element. Column headers are rendered as `<th>` elements; data cells as `<td>` elements. Cell text is XML-escaped using Apache Commons Text. Cells that have been reconciled and carry a link are wrapped in an `<a href="...">` element pointing to the entity page.
+
+    **File extension:** `.html`  
+    **Content type:** `text/html`
+
+    ### Excel (.xls and .xlsx)
+
+    Exports to Microsoft Excel format using Apache POI. The `XlsExporter` supports two modes controlled at construction time:
+
+    - **Excel 97–2003** (`.xls`): uses `HSSFWorkbook` — limited to 65,535 rows and 256 columns.
+    - **Excel 2007+** (`.xlsx`): uses `SXSSFWorkbook` in streaming mode — supports up to 1,048,576 rows and 16,384 columns.
+
+    Cell values are typed natively: numbers are stored as `double`, booleans as `boolean`, dates as calendar values formatted `YYYY-MM-DD`, and text as strings. Reconciled cell links are stored as hyperlinks on the cell.
+
+    **Content types:**
+    - `.xls` → `application/vnd.ms-excel`
+    - `.xlsx` → `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+
+    <Warning>
+    Excel's maximum cell text length is 32,767 characters. Exporting a cell that exceeds this limit raises an error and aborts the export.
+    </Warning>
+
+    ### OpenDocument Spreadsheet (ODS)
+
+    Exports to the ISO OpenDocument format using the ODFDOM toolkit. The project name becomes the sheet name. Cell values are typed: numbers as `double`, booleans as `boolean`, dates as calendar values, and everything else as strings. Hyperlinks in reconciled cells are not yet written to ODS output.
+
+    **File extension:** `.ods`  
+    **Content type:** `application/vnd.oasis.opendocument.spreadsheet`
+  </Tab>
+  <Tab title="SQL">
+    ### SQL INSERT statements
+
+    The `SqlExporter` generates a plain-text `.sql` file containing SQL DDL and/or DML statements ready to load into a relational database. The dialog lets you configure the target table name (defaults to the project name with non-word characters replaced by underscores), which columns to include, and per-column SQL types.
+
+    **Available SQL types for columns:** `VARCHAR`, `TEXT`, `INT`, `NUMERIC`, `CHAR`, `DATE`, `TIMESTAMP`
+
+    **Dialog options:**
+
+    | Option | Description |
+    |---|---|
+    | Table name | Target table name; defaults to sanitized project name |
+    | Include structure | Emit a `CREATE TABLE` statement |
+    | Include DROP statement | Prepend `DROP TABLE` before `CREATE TABLE` |
+    | Include IF EXISTS with DROP | Use `DROP TABLE IF EXISTS` |
+    | Include content | Emit `INSERT INTO` statements for data rows |
+    | Trim column names | Strip whitespace from column names |
+    | Output empty rows | Include rows where all selected cells are blank |
+    | Convert null to empty string | Replace `NULL` values with empty strings in inserts |
+
+    <Note>
+    At least one column must be selected before downloading. The exporter raises an error if no columns are checked.
+    </Note>
+
+    Example output structure:
+
+    ```sql
+    CREATE TABLE my_project (
+      name VARCHAR(255),
+      age INT(10),
+      joined DATE
+    );
+
+    INSERT INTO my_project (name, age, joined) VALUES ('Alice', 30, '2023-01-15');
+    INSERT INTO my_project (name, age, joined) VALUES ('Bob', 25, '2022-07-04');
+    ```
+  </Tab>
+  <Tab title="Templating">
+    ### Templating exporter
+
+    The templating exporter gives you full control over output format. You write a template that is evaluated once per matching row (or record), and the results are joined together with a configurable separator and wrapped in a prefix and suffix string. This makes it possible to produce JSON, XML, Markdown, or any other structured text format.
+
+    The template is processed by the same GREL expression engine used in transformations, so all GREL functions — including `jsonize()`, `escape()`, `toLowercase()`, and others — are available inside `{{ }}` delimiters.
+
+    **Template fields:**
+
+    | Field | Description |
+    |---|---|
+    | Prefix | Written once at the start of the output |
+    | Row template | Evaluated for each matching row |
+    | Row separator | Written between consecutive row outputs |
+    | Suffix | Written once at the end of the output |
+
+    The default template produces a JSON array:
+
+    ```text
+    Prefix:
+    {
+      "rows" : [
+
+    Row template:
+        {
+          "column1" : {{jsonize(cells["column1"].value)}},
+          "column2" : {{jsonize(cells["column2"].value)}}
+        }
+
+    Row separator:
+    ,
+
+    Suffix:
+      ]
+    }
+    ```
+
+    A live preview of the first 20 rows updates in the dialog as you type. The last-used template is saved as a project preference (`exporters.templating.template`) and restored the next time you open the dialog.
+
+    <Tip>
+    Use `jsonize()` to safely quote string values in JSON output. For XML, use `escape(value, 'xml')`.
+    </Tip>
+  </Tab>
+</Tabs>
+
+## Custom tabular exporter
+
+The **Custom tabular exporter** dialog is a unified interface for exporting to CSV, TSV, custom-delimited text, Excel, or HTML with precise control over column selection, ordering, and per-column formatting options. It is available from **Export → Custom tabular exporter**.
+
+<Steps>
+  <Step title="Select and order columns">
+    The **Content** tab shows all columns as a sortable, checkable list. Drag rows to reorder columns in the output. Use **Select all** or **Deselect all** to toggle all checkboxes at once. Columns that are unchecked are omitted entirely.
+  </Step>
+  <Step title="Configure per-column options">
+    Click a column name to open its individual settings:
+
+    - **Reconciled cells** — choose between outputting the matched entity name, the cell content as-is, or the matched entity ID. Optionally blank unmatched cells and link matched cells to entity pages.
+    - **Date cells** — choose from ISO 8601, short, medium, long, or full locale formats, or enter a custom Java date pattern. You can also convert dates to local time zone and omit the time component.
+  </Step>
+  <Step title="Choose the download format">
+    The **Download** tab selects the output format: TSV, CSV, custom separator (`*sv`), Excel 97 (`.xls`), Excel 2007+ (`.xlsx`), or HTML table. For text-based formats you can also set the line separator, character encoding, and whether to force-quote all fields.
+  </Step>
+  <Step title="Preview or download">
+    Click **Preview** to open a browser tab showing the first ten rows. Click **Download** to trigger the file download and close the dialog.
+  </Step>
+</Steps>
+
+### Option code tab
+
+The **Option code** tab shows the full JSON configuration for the current dialog state. You can copy this JSON, modify it, and paste it back to apply a saved configuration programmatically. This is useful for automating repeated exports with the same settings.
+
+```json
+{
+  "format": "csv",
+  "separator": ",",
+  "lineSeparator": "\n",
+  "encoding": "UTF-8",
+  "quoteAll": false,
+  "outputColumnHeaders": true,
+  "outputBlankRows": false,
+  "columns": [
+    {
+      "name": "id",
+      "reconSettings": {
+        "output": "entity-name",
+        "blankUnmatchedCells": false,
+        "linkToEntityPages": true
+      },
+      "dateSettings": {
+        "format": "iso-8601",
+        "useLocalTimeZone": false,
+        "omitTime": false
+      }
+    }
+  ]
+}
+```

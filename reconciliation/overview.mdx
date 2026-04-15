@@ -1,0 +1,212 @@
+---
+title: "Reconciliation: Linking Data to External Knowledge Bases"
+description: "Link text values in your dataset to entities in external knowledge bases, review candidate matches, and enrich your data with properties from matched items."
+keywords: ["reconciliation", "knowledge base", "matching", "wikidata", "recon service", "extend data", "GREL"]
+---
+
+Reconciliation connects the text values in a column to entities in an external knowledge base — turning a plain string like "Paris" into a link to a specific, uniquely identified item such as the city in France. Once cells are reconciled, you can review the candidates OpenRefine suggests, confirm or override matches, mark values that need new items, and then pull in additional properties (population, coordinates, official website) as new columns — all without leaving OpenRefine.
+
+## How reconciliation works
+
+OpenRefine sends each cell value to a reconciliation service, which returns a ranked list of candidate matches. Each candidate has a name, a unique identifier, a type, and a score indicating how closely it matches the query. OpenRefine stores this information in the cell alongside your original value; the two exist side by side so your source data is never overwritten.
+
+The reconciliation workflow has three stages:
+
+<Steps>
+  <Step title="Start reconciliation">
+    Open the column menu, choose **Reconcile → Start reconciling**, and select a service. Configure the entity type to match against and any additional column properties to send as context. Click **Start Reconciling** to begin.
+  </Step>
+  <Step title="Review candidates">
+    After reconciliation completes, each cell shows the best candidate inline. Cells with high-confidence automatic matches are highlighted differently from cells that need manual review. Click any cell to see its full candidate list with scores.
+  </Step>
+  <Step title="Judge results">
+    For each cell, confirm the correct match, choose a different candidate, mark the value as a new item that does not yet exist in the knowledge base, or discard the judgment entirely to leave it unresolved.
+  </Step>
+</Steps>
+
+## Reconciliation services
+
+A reconciliation service is a web endpoint that implements the [W3C Entity Reconciliation Community Group API](https://www.w3.org/community/reconciliation/). The service receives a batch of text queries and returns scored candidate lists for each. Any service that conforms to this standard works with OpenRefine — there is no vendor lock-in.
+
+OpenRefine ships with the Wikidata reconciliation service pre-registered. You can add as many services as you need.
+
+### Adding a reconciliation service
+
+<Steps>
+  <Step title="Open the reconcile dialog">
+    Click the column menu on any column and choose **Reconcile → Start reconciling**.
+  </Step>
+  <Step title="Add a standard service">
+    Click **Add Standard Service**. Enter the service URL and click **Add Service**. OpenRefine contacts the URL to fetch the service manifest, then registers it for future use.
+  </Step>
+  <Step title="Select the service">
+    The newly added service appears in the list. Select it and click **Next** to configure reconciliation options.
+  </Step>
+</Steps>
+
+<Note>
+  Service URLs are saved to the `reconciliation.standardServices` preference and persist across projects. If a URL is already registered, OpenRefine alerts you rather than adding a duplicate.
+</Note>
+
+## Configuring reconciliation options
+
+After choosing a service, OpenRefine presents configuration options before sending any queries.
+
+### Entity type
+
+You can restrict candidates to a particular entity type. OpenRefine guesses which types are most relevant by sampling values from the column. You can accept the suggested type, pick a different one using the type search box, or choose **No particular type** to search across all entities.
+
+The type constraint is sent as a `type` and `type_strict: "should"` parameter in the reconciliation query, telling the service to prefer — but not exclusively return — candidates of that type.
+
+### Column details (context properties)
+
+You can map other columns in your dataset to properties in the knowledge base to improve match accuracy. For example, if reconciling a "Person" column, you could map a "Birth year" column to the date-of-birth property. OpenRefine sends these as additional `properties` in each reconciliation query.
+
+If a context cell is itself already reconciled, OpenRefine sends its matched entity identifier rather than the plain text value, giving the service more precise context.
+
+### Auto-match
+
+When **Auto-match candidates with high confidence** is checked, OpenRefine automatically marks any result where the service returns `"match": true` on the top-ranked candidate. These cells receive a `Matched` judgment immediately without requiring manual review.
+
+### Maximum candidates
+
+The **Maximum candidates** field controls the `limit` parameter sent in queries. Setting it to 0 uses the service's default. Increasing it gives you more options to review per cell but does not affect which candidate is auto-matched.
+
+## Judging reconciliation results
+
+After reconciliation runs, use the column's **Reconcile** sub-menu to act on results in bulk, or click individual cells to judge them one at a time.
+
+<Tabs>
+  <Tab title="Match a candidate">
+    Click a candidate name in the cell pop-up to confirm it as the correct match. The cell judgment changes to **Matched** and the entity identifier is stored alongside the cell value.
+  </Tab>
+  <Tab title="Match best candidates">
+    Use **Reconcile → Actions → Match each cell to its best candidate** to bulk-accept the top candidate for every unmatched cell in the column. Use this after reviewing a sample and deciding the suggestions look accurate.
+  </Tab>
+  <Tab title="Create new items">
+    Use **Reconcile → Actions → Mark all new topics** (or judge individual cells as **New**) when the value represents an entity that does not yet exist in the knowledge base. Cells marked New carry a `new` judgment and can later be used as the basis for creating items.
+  </Tab>
+  <Tab title="Discard judgments">
+    Use **Reconcile → Actions → Discard all judgments** to reset a column back to unreconciled status while keeping the candidate data intact.
+  </Tab>
+</Tabs>
+
+### Copying judgments across columns
+
+If multiple columns contain the same entities, you can copy judgments from one reconciled column to others using **Reconcile → Copy across columns**. You specify which judgment types to copy (Matched, New, or both) and whether to overwrite cells that already have a judgment.
+
+## Extending data from reconciled entities
+
+Once cells are matched, you can fetch additional properties for each matched entity and add them as new columns. This is called data extension.
+
+<Steps>
+  <Step title="Open the extension dialog">
+    Click the column menu and choose **Reconcile → Add columns from reconciled values**.
+  </Step>
+  <Step title="Select properties">
+    OpenRefine queries the reconciliation service's `extend` endpoint to retrieve available properties. Select the properties you want — for example, population, coordinates, or official website.
+  </Step>
+  <Step title="Preview and confirm">
+    Click **Preview** to see sample values, then confirm to add one new column per selected property. Cells in the new columns are themselves reconciled if the returned values are entities.
+  </Step>
+</Steps>
+
+<Note>
+  Data extension requires the reconciliation service to support the `extend` endpoint. Not all services implement it; check the service's documentation.
+</Note>
+
+## Using cell values as identifiers
+
+If a column already contains entity identifiers from a known knowledge base (for example, Wikidata Q-numbers), you can use **Reconcile → Use values as identifiers** to mark every cell as Matched without running queries. OpenRefine sets each cell's judgment to `Matched` with the cell value as the entity ID, associating the column with the specified service, identifier space, and schema space.
+
+## Accessing reconciliation data in GREL
+
+Once cells are reconciled, OpenRefine exposes the reconciliation data through the `cell.recon` object in GREL expressions.
+
+<AccordionGroup>
+  <Accordion title="Matched entity">
+
+    | Expression | Returns |
+    |---|---|
+    | `cell.recon.match.id` | The identifier of the matched entity (e.g., `Q90` for Paris on Wikidata) |
+    | `cell.recon.match.name` | The label of the matched entity |
+    | `cell.recon.matched` | `true` if the cell has a confirmed match |
+
+    ```grel
+    cell.recon.match.id
+    ```
+
+  </Accordion>
+  <Accordion title="Judgment and candidates">
+
+    | Expression | Returns |
+    |---|---|
+    | `cell.recon.judgment` | One of `"matched"`, `"new"`, `"none"`, or `"error"` |
+    | `cell.recon.best.id` | The identifier of the top-ranked candidate, even if not confirmed |
+    | `cell.recon.best.name` | The label of the top-ranked candidate |
+    | `cell.recon.candidates` | The full list of candidates |
+
+    ```grel
+    cell.recon.judgment == "matched"
+    ```
+
+  </Accordion>
+  <Accordion title="Service metadata">
+
+    | Expression | Returns |
+    |---|---|
+    | `cell.recon.service` | The URL of the reconciliation service |
+    | `cell.recon.identifierSpace` | The identifier space URL (e.g., `http://www.wikidata.org/entity/`) |
+    | `cell.recon.schemaSpace` | The schema space URL |
+
+  </Accordion>
+  <Accordion title="Similarity features">
+
+    OpenRefine computes similarity features comparing the cell value to the top candidate. These are accessible via `cell.recon.features`:
+
+    | Expression | Returns |
+    |---|---|
+    | `cell.recon.features.nameMatch` | `true` if the cell value matches the candidate name exactly (case-insensitive) |
+    | `cell.recon.features.nameLevenshtein` | Edit distance between the cell value and the candidate name |
+    | `cell.recon.features.nameWordDistance` | Word overlap ratio between the cell value and the candidate name |
+    | `cell.recon.features.typeMatch` | `true` if the matched entity's type matches the configured type |
+
+  </Accordion>
+</AccordionGroup>
+
+### Example: extract matched identifiers into a new column
+
+To create a column containing only the entity identifier for each matched cell:
+
+```grel
+if(cell.recon.matched, cell.recon.match.id, null)
+```
+
+### Example: filter unmatched rows
+
+Use a text facet or custom facet expression to isolate cells that still need review:
+
+```grel
+cell.recon.judgment
+```
+
+Then select the `none` facet value to focus on unresolved cells.
+
+## What happens after reconciliation
+
+After judging all cells, common next steps include:
+
+<CardGroup cols={2}>
+  <Card title="Extend data" icon="table-columns">
+    Fetch related properties from the knowledge base and add them as new columns using **Add columns from reconciled values**.
+  </Card>
+  <Card title="Export with identifiers" icon="file-export">
+    Export the reconciled column using its matched identifiers instead of raw text by choosing the appropriate export template.
+  </Card>
+  <Card title="Copy judgments" icon="copy">
+    Propagate matched judgments to other columns that share the same entities using **Copy across columns**.
+  </Card>
+  <Card title="Upload to Wikidata" icon="upload">
+    Use the built-in Wikibase extension to upload matched and new items directly to Wikidata. See [Wikidata reconciliation](/reconciliation/wikidata).
+  </Card>
+</CardGroup>

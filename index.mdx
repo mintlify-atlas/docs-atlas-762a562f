@@ -1,97 +1,57 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "OpenRefine: Clean, Transform, and Reconcile Data"
+description: "OpenRefine is a free, open source tool for cleaning, transforming, and reconciling messy datasets — all in your browser, all on your own machine."
 ---
 
-## Setting up
+OpenRefine is a powerful desktop application that runs in your browser, giving you full control over messy data without sending it to any external server. Whether you're cleaning a spreadsheet, transforming JSON, or reconciling values against Wikidata, OpenRefine handles it all with a visual, interactive workflow that keeps a complete history of every change you make.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Download and install OpenRefine on Windows, Mac, or Linux in minutes.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Load your first dataset and run your first transformation in under 5 minutes.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Importing Data" icon="file-import" href="/importing/overview">
+    Load CSV, Excel, JSON, XML, RDF, and dozens more formats into a project.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Transforming Data" icon="wand-magic-sparkles" href="/transforming/expressions">
+    Use GREL, Jython, or Clojure expressions to clean and reshape any dataset.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## What you can do with OpenRefine
 
-Everything you need to create world-class documentation.
+OpenRefine brings together data exploration, cleaning, and enrichment in a single interactive tool — no coding required for most tasks, with full scripting power when you need it.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
+<CardGroup cols={2}>
+  <Card title="Facets & Filters" icon="filter" href="/exploring/facets-filters">
+    Slice and dice your data with text, numeric, and timeline facets to find patterns instantly.
   </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
+  <Card title="Clustering" icon="object-group" href="/exploring/clustering">
+    Automatically group similar values and merge them to fix inconsistencies at scale.
   </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
+  <Card title="Reconciliation" icon="link" href="/reconciliation/overview">
+    Match your data against external knowledge bases like Wikidata or any reconciliation service.
   </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
+  <Card title="Exporting" icon="file-export" href="/exporting/overview">
+    Export cleaned data to CSV, Excel, JSON, RDF, SQL, and fully custom templates.
   </Card>
-</Columns>
+</CardGroup>
 
-## Need inspiration?
+## For developers
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<CardGroup cols={2}>
+  <Card title="Architecture overview" icon="sitemap" href="/dev/architecture">
+    Understand how OpenRefine's Java backend, Butterfly framework, and browser UI fit together.
+  </Card>
+  <Card title="Building from source" icon="hammer" href="/dev/building-from-source">
+    Compile and run OpenRefine locally using Maven, JDK 11+, and Node.js.
+  </Card>
+  <Card title="Extensions" icon="puzzle-piece" href="/dev/extensions/overview">
+    Build your own extension or use the built-in Database, Wikibase, Jython, and PC-Axis extensions.
+  </Card>
+  <Card title="GREL reference" icon="code" href="/dev/grel/overview">
+    Complete reference for the General Refine Expression Language — strings, arrays, math, and dates.
+  </Card>
+</CardGroup>

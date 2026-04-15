@@ -1,0 +1,225 @@
+---
+title: 'GREL Date Functions: Parsing, Formatting, and Arithmetic'
+description: 'Complete reference for GREL date functions in OpenRefine: parsing, formatting, extracting date parts, incrementing dates, and working with Unix timestamps.'
+keywords: ['grel date functions', 'openrefine date', 'grel toDate', 'grel datePart', 'grel date format', 'date parsing']
+---
+
+Dates in GREL are stored as `OffsetDateTime` objects (ISO 8601 with UTC offset). Internally OpenRefine uses the `[date ...]` representation when displaying dates in cells. Most date functions accept this date object type, and `toDate()` is the primary way to convert strings or numbers into dates.
+
+## Date objects
+
+When OpenRefine stores a date in a cell, it is typed as a date (not a string). In GREL, you can check whether a value is a date with `type(value) == "date"`. Date values print in ISO 8601 extended format, for example: `2024-01-15T10:30:00Z`.
+
+To produce a date object from a string, use `toDate()`. To turn a date object back into a string, use `toString()` with a format pattern.
+
+## Converting to date: `toDate`
+
+```text
+toDate(o, boolean monthFirst, string format1, string format2, ...)
+```
+
+Converts the value `o` to a date object. Returns `null` if the conversion fails.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `o` | any | The value to convert (string, number, or existing date) |
+| `monthFirst` | boolean (optional) | Set to `false` if the date format puts the day before the month (e.g., `31/01/2024`). Defaults to `true`. |
+| `format1, format2, ...` | string (optional) | One or more format strings using [Java SimpleDateFormat](https://docs.oracle.com/javase/8/docs/api/java/text/SimpleDateFormat.html) syntax. Tried in order until one succeeds. |
+
+```text
+value.toDate()                         // auto-detect ISO 8601
+value.toDate(false)                    // day-first parsing (e.g., "15/01/2024")
+value.toDate("MM/dd/yyyy")            // explicit format
+value.toDate("dd-MMM-yyyy", "MM/dd/yyyy")  // try multiple formats
+"January 15, 2024".toDate("MMMM d, yyyy")
+```
+
+### Common format tokens
+
+| Token | Meaning | Example |
+|---|---|---|
+| `yyyy` | 4-digit year | `2024` |
+| `yy` | 2-digit year | `24` |
+| `MM` | 2-digit month (01–12) | `01` |
+| `MMM` | Abbreviated month name | `Jan` |
+| `MMMM` | Full month name | `January` |
+| `dd` | 2-digit day of month | `15` |
+| `d` | Day of month (1–31) | `5` |
+| `HH` | Hour (00–23) | `14` |
+| `hh` | Hour (01–12) | `02` |
+| `mm` | Minute (00–59) | `30` |
+| `ss` | Second (00–59) | `00` |
+| `SSS` | Milliseconds | `000` |
+| `z` | Timezone abbreviation | `UTC` |
+| `Z` | Timezone offset | `+0000` |
+
+## Getting the current time: `now`
+
+```text
+now()
+```
+
+Returns the current system clock time as an `OffsetDateTime` in UTC.
+
+```text
+now()    // e.g., 2024-01-15T14:30:00Z
+```
+
+<Note>
+`now()` returns the same instant for all rows within a single transform operation.
+</Note>
+
+## Extracting date parts: `datePart`
+
+```text
+datePart(date d, string timeUnit)
+```
+
+Returns a specific component of the date. The return type depends on the unit.
+
+| Time unit | Aliases | Returns | Example |
+|---|---|---|---|
+| `years` | `year` | number | `2024` |
+| `months` | `month` | number | `1` (January = 1) |
+| `weeks` | `week`, `w` | number | week of month |
+| `days` | `day`, `d` | number | `15` |
+| `weekday` | — | string | `"Monday"` |
+| `hours` | `hour`, `h` | number | `14` |
+| `minutes` | `minute`, `min` | number | `30` |
+| `seconds` | `sec`, `s` | number | `0` |
+| `milliseconds` | `ms`, `S` | number | `0` |
+| `nanos` | `nano`, `n` | number | nanoseconds |
+| `time` | — | number | milliseconds since Unix epoch |
+
+```text
+value.datePart("year")         // 2024
+value.datePart("month")        // 1
+value.datePart("day")          // 15
+value.datePart("weekday")      // "Monday"
+value.datePart("hours")        // 14
+value.datePart("time")         // 1705323000000
+```
+
+<Warning>
+Month numbering starts at 1 (January = 1, December = 12). This differs from older Java `Calendar` behavior (where January was 0).
+</Warning>
+
+## Incrementing dates: `inc`
+
+```text
+inc(date d, number n, string unit)
+```
+
+Returns a new date that is `n` units later (or earlier, if `n` is negative) than `d`. The date object itself is not mutated.
+
+Supported units: `years`, `months`, `weeks`, `days`, `hours`, `minutes`, `seconds`, `milliseconds`, `nanos` (and their short aliases).
+
+```text
+value.inc(1, "year")           // add 1 year
+value.inc(-30, "days")         // go back 30 days
+value.inc(3, "months")         // add 3 months
+value.inc(6, "h")              // add 6 hours
+```
+
+## Date arithmetic with `diff`
+
+The `diff` function works on both strings and dates. For dates, provide two date objects and a time unit:
+
+```text
+diff(date1, date2, string unit)
+```
+
+Returns `(date1 - date2)` expressed in the given unit as a number.
+
+Supported units: `years`, `months`, `weeks`, `days`, `hours`, `minutes`, `seconds`, `milliseconds`, `nanos`.
+
+```text
+diff(now(), value.toDate(), "days")       // days since the date in `value`
+diff(cells["End"].value.toDate(), cells["Start"].value.toDate(), "hours")
+```
+
+## Converting from Unix timestamp: `timeSinceUnixEpochToDate`
+
+```text
+timeSinceUnixEpochToDate(number n, string unit (optional))
+```
+
+Converts a Unix timestamp `n` to a date object. The `unit` defaults to `"second"`.
+
+| Unit | Description |
+|---|---|
+| `second` | Seconds since 1970-01-01T00:00:00Z (default) |
+| `millisecond` | Milliseconds since epoch |
+| `microsecond` | Microseconds since epoch |
+
+```text
+timeSinceUnixEpochToDate(1705323000)              // 2024-01-15T10:30:00Z
+timeSinceUnixEpochToDate(1705323000000, "millisecond")
+```
+
+## Formatting dates as strings: `toString`
+
+```text
+toString(date d, string format)
+```
+
+Converts a date object to a string using a [Java SimpleDateFormat](https://docs.oracle.com/javase/8/docs/api/java/text/SimpleDateFormat.html) pattern:
+
+```text
+value.toString("yyyy-MM-dd")           // "2024-01-15"
+value.toString("dd/MM/yyyy")           // "15/01/2024"
+value.toString("MMMM d, yyyy")         // "January 15, 2024"
+value.toString("yyyy-MM-dd'T'HH:mm:ssZ")  // "2024-01-15T10:30:00+0000"
+```
+
+## Timezone handling
+
+OpenRefine stores all dates internally as UTC (`Z` offset). When you call `toDate()` on a string, the timezone in the string is respected if present; otherwise the value is parsed as UTC.
+
+When you call `toString()` to format a date, the output timezone reflects the stored UTC offset unless your format string includes a timezone token.
+
+```text
+"2024-01-15T10:30:00+05:00".toDate()  // parsed and stored as 2024-01-15T05:30:00Z
+```
+
+## Practical examples
+
+**Reformat a date string:**
+```text
+value.toDate("MM/dd/yyyy").toString("yyyy-MM-dd")
+```
+
+**Calculate age in years from a birthdate column:**
+```text
+diff(now(), cells["Birthdate"].value.toDate("yyyy-MM-dd"), "years")
+```
+
+**Add 90 days to a date and format it:**
+```text
+value.toDate().inc(90, "days").toString("yyyy-MM-dd")
+```
+
+**Check if a date is in the past:**
+```text
+diff(now(), value.toDate(), "days") > 0
+```
+
+**Extract just the year from a date string:**
+```text
+value.toDate().datePart("year")
+```
+
+**Convert a Unix millisecond timestamp column to an ISO string:**
+```text
+timeSinceUnixEpochToDate(toNumber(value), "millisecond").toString("yyyy-MM-dd'T'HH:mm:ss'Z'")
+```
+
+**Get the day of the week:**
+```text
+value.toDate().datePart("weekday")
+```
+
+**Normalize dates that may be in multiple formats:**
+```text
+toDate(value, "MM/dd/yyyy", "dd-MM-yyyy", "yyyy-MM-dd")
+```

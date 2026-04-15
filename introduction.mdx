@@ -1,0 +1,53 @@
+---
+title: "What is OpenRefine? Data Cleaning Tool Overview"
+description: "OpenRefine is a free, open source desktop tool for cleaning, transforming, and reconciling messy data — on your own machine, with no data sent to external servers."
+keywords: ["openrefine", "data cleaning", "data transformation", "reconciliation", "google refine", "open source"]
+---
+
+OpenRefine is a Java-based power tool that runs entirely in your web browser while keeping all your data on your own computer. Whether you are cleaning up a messy CSV export, clustering inconsistent place names, reconciling records against Wikidata, or transforming XML into a tidy spreadsheet, OpenRefine handles the entire workflow interactively — no command line required, and nothing ever leaves your machine.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Import any format" icon="file-import">
+    Load CSV, TSV, Excel, JSON, XML, RDF, Google Sheets, and data from URLs or paste-from-clipboard. OpenRefine parses and previews your data before you commit to a project.
+  </Card>
+  <Card title="Explore and filter" icon="filter">
+    Use text, numeric, and timeline facets to slice your data instantly. Facets update in real time as you apply transformations, giving you a live view of what changed.
+  </Card>
+  <Card title="Cluster and merge" icon="object-group">
+    OpenRefine's clustering algorithms automatically group similar values — for example, "New York", "new york", and "N.Y." — so you can merge them with a single click.
+  </Card>
+  <Card title="Transform with expressions" icon="wand-magic-sparkles">
+    Apply cell and column transformations using GREL (General Refine Expression Language), Jython (Python syntax), or Clojure. Built-in operations like trim whitespace and change case require no coding at all.
+  </Card>
+  <Card title="Reconcile against external databases" icon="link">
+    Match your data against Wikidata, any OpenRefine reconciliation service, or a custom endpoint. Reconciled values become linked data enriched with properties from the knowledge base.
+  </Card>
+  <Card title="Export to any format" icon="file-export">
+    Export your cleaned data as CSV, TSV, Excel, JSON, RDF, SQL, or a fully custom template. Every transformation is reversible, so you can export at any point in your history.
+  </Card>
+</CardGroup>
+
+## Privacy first
+
+Because OpenRefine runs as a local server on your own computer, your data never leaves your machine. There is no account, no cloud upload, and no subscription. You access the interface through your browser at `http://127.0.0.1:3333`, but every byte of your dataset stays on disk.
+
+<Note>
+  OpenRefine binds to `127.0.0.1` by default, which means it is only reachable from the machine running it. You can change the interface binding with the `-i` flag if you need LAN access, but be aware of the security implications before doing so.
+</Note>
+
+## A brief history
+
+OpenRefine was created by Metaweb Technologies and originally conceived by David Huynh. When Google acquired Metaweb in July 2010, the product was renamed **Google Refine**. In October 2012, Google handed the project to the open source community and it was renamed **OpenRefine**. Since 2020, the project has been fiscally sponsored by [Code for Science and Society](https://www.codeforsociety.org/). It is released under the BSD license.
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Download and install OpenRefine on Windows, Mac, or Linux.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Load a dataset, run your first transformation, and export clean data.
+  </Card>
+</CardGroup>

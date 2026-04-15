@@ -1,0 +1,217 @@
+---
+title: 'GREL: OpenRefine Expression Language Reference'
+description: 'Learn GREL syntax, variables, type coercion, null handling, and control structures to write powerful data transformation expressions in OpenRefine.'
+keywords: ['grel', 'expression language', 'openrefine expressions', 'grel syntax', 'grel variables']
+---
+
+GREL (General Refine Expression Language) is OpenRefine's built-in expression language, designed specifically for data transformation tasks. It is loosely typed, concise, and optimized for operating on tabular data — making it the most direct way to clean, reshape, and enrich values inside OpenRefine. GREL expressions are entered wherever OpenRefine prompts you for an expression: in cell transforms, column additions, custom text facets, and more.
+
+## Basic syntax
+
+GREL supports two equivalent calling conventions. You can chain functions using **dot notation**, where the value before the dot becomes the first argument:
+
+```text
+value.trim().toLowercase()
+```
+
+Or you can use **function notation**, passing arguments explicitly:
+
+```text
+toLowercase(trim(value))
+```
+
+Both forms produce the same result. Dot notation is usually more readable when chaining multiple operations. Function notation is sometimes clearer when a function takes several arguments or when there is no natural "subject" value.
+
+String literals must be enclosed in single or double quotes. Regular expressions are written between forward slashes: `/pattern/`.
+
+```text
+value.replace("foo", "bar")
+value.replace(/\s+/, "_")
+```
+
+## Variables
+
+Every GREL expression runs in the context of a single cell. The following variables are available:
+
+| Variable | Type | Description |
+|---|---|---|
+| `value` | any | The current cell's value |
+| `cell` | object | The current cell object; has `.value` and `.recon` fields |
+| `row` | object | The current row; has `.index`, `.cells`, `.columnNames`, `.flagged`, `.starred` fields |
+| `cells` | object | All cells in the current row, keyed by column name |
+| `rowIndex` | number | The zero-based index of the current row |
+| `columnName` | string | The name of the column being transformed |
+| `record` | object | The current record (when in records mode); has `.cells`, `.fromRowIndex`, `.toRowIndex` |
+
+### Accessing other columns
+
+Use `cells` with the column name to read values from other columns in the same row:
+
+```text
+cells["Country"].value
+cells["First Name"].value + " " + cells["Last Name"].value
+```
+
+If the column name contains no spaces or special characters, dot notation also works:
+
+```text
+cells.Country.value
+```
+
+### Row fields
+
+```text
+row.index          // zero-based row number
+row.cells          // same as cells
+row.columnNames    // array of all column names
+row.flagged        // boolean
+row.starred        // boolean
+```
+
+## Type coercion
+
+GREL is loosely typed. Most operations will attempt to coerce values to the required type automatically. For example, arithmetic operators coerce strings to numbers, and comparison operators coerce numbers to strings when needed. However, some functions are strict and will return an error if the wrong type is provided. Use `type(value)` to inspect a value's type, and `toNumber()`, `toString()`, or `toDate()` to convert explicitly.
+
+```text
+type(value)         // "string", "number", "boolean", "date", "array", "undefined"
+toNumber("3.14")    // 3.14
+toString(42)        // "42"
+toDate("2024-01-15") // date object
+```
+
+## Null and blank handling
+
+In GREL, **null** means the cell has no value at all. A **blank** is either null or an empty string (`""`). Many functions return `null` when given bad input rather than throwing errors, so expressions can silently produce empty results.
+
+Use `isNull(value)`, `isBlank(value)`, and `isNonBlank(value)` to test:
+
+```text
+isNull(value)           // true if cell is null
+isBlank(value)          // true if null or ""
+isNonBlank(value)       // true if not null and not ""
+coalesce(value, "N/A")  // returns value if non-null, otherwise "N/A"
+```
+
+The `forNonBlank` control is useful for handling blanks inline:
+
+```text
+forNonBlank(value, v, v.trim(), "")
+```
+
+## Testing expressions
+
+Use **Edit cells → Transform** (or any expression dialog) to test GREL interactively. The preview pane on the left shows the current value; the transformed value appears on the right in real time as you type. Error messages appear in red beneath the preview.
+
+You can also open the expression editor from **Edit column → Add column based on this column** to preview the result across all rows before committing.
+
+## Controls
+
+Controls differ from functions: they receive unevaluated expressions as arguments, giving them branching and looping capabilities.
+
+### `if`
+
+Evaluates `test`; if true, returns `eTrue`; otherwise returns `eFalse`.
+
+```text
+if(test, eTrue, eFalse)
+```
+
+```text
+if(value.length() > 10, value.slice(0, 10), value)
+```
+
+### `forEach`
+
+Iterates over an array, binding each element to variable `v`, evaluates `e`, and returns an array of results.
+
+```text
+forEach(array, v, expression)
+```
+
+```text
+forEach(value.split(","), v, v.trim())
+```
+
+### `forEachIndex`
+
+Like `forEach`, but also binds the current index to `i`.
+
+```text
+forEachIndex(array, i, v, expression)
+```
+
+```text
+forEachIndex(value.split("|"), i, v, (i + 1) + ". " + v)
+```
+
+### `filter`
+
+Returns only the elements of an array for which the test expression evaluates to `true`.
+
+```text
+filter(array, v, test)
+```
+
+```text
+filter(value.split(","), v, v.length() > 0)
+```
+
+### `with`
+
+Evaluates `expression` with `variable` bound to the result of `value`. Useful for avoiding repeated computation.
+
+```text
+with(value, v, expression)
+```
+
+```text
+with(value.trim().toLowercase(), v, if(v == "yes", true, false))
+```
+
+### `forNonBlank`
+
+Evaluates `eNonBlank` if `o` is non-blank (binding it to `v`); otherwise evaluates `eBlank`.
+
+```text
+forNonBlank(o, v, eNonBlank, eBlank)
+```
+
+### `forRange`
+
+Iterates a numeric counter `v` from `from` to `to` (exclusive) by `step`, collecting results.
+
+```text
+forRange(from, to, step, v, expression)
+```
+
+```text
+forRange(0, 5, 1, i, i * i)  // [0, 1, 4, 9, 16]
+```
+
+### `isTest` family
+
+These test controls return a boolean without needing a separate expression:
+
+| Control | Returns `true` when… |
+|---|---|
+| `isNull(o)` | value is null |
+| `isNotNull(o)` | value is not null |
+| `isBlank(o)` | value is null or empty string |
+| `isNonBlank(o)` | value is not null and not empty string |
+| `isNumeric(o)` | value is a number or a numeric string |
+| `isError(o)` | value is a GREL error |
+| `isEmptyString(o)` | value is exactly the empty string `""` |
+
+## Comparison to Jython and Clojure
+
+OpenRefine also supports **Jython** (Python 2 via the Jython interpreter on the JVM) and **Clojure** as alternative expression languages. GREL is the default and is the most commonly documented. Use Jython or Clojure when you need:
+
+- Complex logic not easily expressed in GREL
+- Access to Python or Clojure standard libraries
+- Multi-line scripts
+
+Select the language from the "Expression language" dropdown in the expression editor dialog. All three languages share access to the same `value`, `row`, `cells`, `rowIndex`, and `columnName` bindings.
+
+<Info>
+GREL expressions evaluate per-row, not per-project. There is no looping over all rows inside a single GREL expression — use the `forEach` control to iterate over the contents of a single cell's array value.
+</Info>

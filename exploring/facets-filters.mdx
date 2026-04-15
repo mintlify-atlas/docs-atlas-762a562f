@@ -1,0 +1,166 @@
+---
+title: "Facets & Filters: Exploring Your Data in OpenRefine"
+description: "Use text, numeric, timeline, and scatterplot facets alongside text filters to narrow visible rows, isolate problems, and select subsets for bulk edits."
+keywords: ["facets", "filters", "text facet", "numeric facet", "timeline facet", "scatterplot facet", "openrefine browsing", "data exploration"]
+---
+
+Facets are OpenRefine's primary tool for exploring and narrowing your dataset. Each facet evaluates an expression against every row and groups the results into choices; selecting a choice constrains the row display to only those matching rows. Multiple active facets combine with AND logic — each additional facet further narrows the set of visible rows. Because facets are evaluated at browse time, they update immediately as you make selections or run transformations.
+
+## What is a facet?
+
+Internally, OpenRefine evaluates the facet's expression against each row and accumulates the results into a list or histogram ([`ListFacet.java`](https://github.com/OpenRefine/OpenRefine/blob/master/modules/core/src/main/java/com/google/refine/browsing/facets/ListFacet.java), [`RangeFacet.java`](https://github.com/OpenRefine/OpenRefine/blob/master/modules/core/src/main/java/com/google/refine/browsing/facets/RangeFacet.java)). The facet panel shows each distinct value alongside a row count. Clicking a value sets the active selection; subsequent row operations only affect the visible, matching rows.
+
+<Note>
+  Facets work in both **row mode** and **record mode**. In record mode, a record is included when *any* of its rows matches the facet criteria.
+</Note>
+
+## Types of facets
+
+<Tabs>
+  <Tab title="Text facet">
+    A text facet groups rows by the distinct string values in a column (or the result of a GREL expression). It uses the `list` JSON type internally and supports up to 2,000 choices by default (controlled by the `ui.browsing.listFacet.limit` preference).
+
+    **To add a text facet:**
+
+    <Steps>
+      <Step title="Open the column menu">
+        Click the arrow next to the column name you want to facet on.
+      </Step>
+      <Step title="Choose Facet → Text facet">
+        OpenRefine evaluates the column value for every row and groups them into a list of choices.
+      </Step>
+      <Step title="Select one or more choices">
+        Click a choice to include it. Hold **Ctrl** (or **Cmd** on macOS) and click additional choices to include multiple values. The row display updates immediately.
+      </Step>
+    </Steps>
+
+    **Sorting choices:** Click **Sort by name** or **Sort by count** at the top of the facet panel to reorder the choice list.
+
+    **Working with blanks and errors:** The facet shows a **blank** choice (for cells with no value) and an **error** choice (for cells where the expression produced an error) when those rows exist. You can include or exclude them with the `selectBlank` and `selectError` flags — or hide them entirely using **omit blank** / **omit error** from the facet menu.
+  </Tab>
+
+  <Tab title="Numeric facet">
+    A numeric facet evaluates a numeric expression per row and displays a histogram of the distribution. You select a range by dragging the slider handles. The facet uses the `range` JSON type.
+
+    It separately counts and lets you include or exclude:
+    - **Numeric** rows — cells where the expression returned a number
+    - **Non-numeric** rows — cells where the expression returned a non-number value
+    - **Blank** rows — cells with no value
+    - **Error** rows — cells where the expression raised an error
+
+    **Example expression:** To facet by string length, use the custom numeric facet with `value.length()`.
+
+    <Tip>
+      If the facet shows "No numeric value present", your expression did not return a number for any row. Check that the column contains numeric data or that your GREL expression returns a number.
+    </Tip>
+  </Tab>
+
+  <Tab title="Timeline facet">
+    A timeline facet works like a numeric facet but operates on date/time values. It uses the `timerange` JSON type and bins rows into time intervals. Use it to select a date range or to isolate rows where the date is blank, non-date, or an error.
+
+    Timeline facets are most useful after converting a column to OpenRefine's internal date type via **Edit cells → Common transforms → To date**.
+  </Tab>
+
+  <Tab title="Scatterplot facet">
+    A scatterplot facet plots rows using two numeric expressions — one for the X axis and one for the Y axis — and renders the result as a small scatter plot image. You select a rectangular region of the plot to filter rows.
+
+    Configuration options from the source include:
+    - **X/Y column and expression** — independently configurable axes
+    - **Scale** — `lin` (linear) or `log` (logarithmic) for each axis
+    - **Rotation** — `cw` (clockwise) or `ccw` (counterclockwise) to rotate the plot 45°
+    - **Dot size** and **color**
+
+    Scatterplot facets are useful for spotting outliers or correlations between two numeric columns.
+  </Tab>
+</Tabs>
+
+## Custom facets
+
+Custom facets let you write a GREL (or Jython/Clojure) expression to derive the facet value.
+
+<AccordionGroup>
+  <Accordion title="Custom text facet">
+    A custom text facet evaluates any expression that returns a string and groups the results as a list facet. Access it via **Facet → Custom text facet…**.
+
+    **Example:** Group rows by the first character of a value:
+
+    ```grel
+    value[0]
+    ```
+
+    **Example:** Group rows by whether a value contains a digit:
+
+    ```grel
+    value.contains(/\d/).toString()
+    ```
+  </Accordion>
+  <Accordion title="Custom numeric facet">
+    A custom numeric facet evaluates any expression that returns a number and displays a range histogram. Access it via **Facet → Custom numeric facet…**.
+
+    **Example:** Facet by string length to find unusually short or long values:
+
+    ```grel
+    value.length()
+    ```
+
+    **Example:** Facet by the number of words in a cell:
+
+    ```grel
+    value.split(" ").length()
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Text filter
+
+The text filter is separate from the facet system. Rather than grouping distinct values, it performs a substring or regex search within a column and hides rows that do not match.
+
+**To add a text filter:**
+
+1. Click the arrow next to a column name and choose **Text filter**.
+2. Type in the search box. Rows update in real time.
+3. Check **regular expression** to treat the query as a regex pattern.
+4. Check **case sensitive** to make the match case-sensitive (off by default).
+
+Internally, the text filter compiles the query as a `java.util.regex.Pattern` when regex mode is active (`TextSearchFacet.java:175-179`). In plain substring mode it lower-cases both the query and the cell value when case-insensitive matching is requested.
+
+<Note>
+  Text filters support the **invert** option. Click **invert** in the filter panel to show only rows that do *not* match the query.
+</Note>
+
+## Combining facets
+
+Every active facet and text filter applies simultaneously with AND logic. A row is visible only when it satisfies all active constraints. For example:
+
+- A text facet selecting `"United States"` in a `Country` column, AND
+- A numeric facet selecting values above 1000 in a `Population` column
+
+…will show only rows where country is "United States" **and** population exceeds 1000.
+
+There is no built-in OR across different columns, but you can select multiple values within a single text facet (Ctrl+click) to apply OR logic within that one column.
+
+## Inverting facets
+
+Each facet has an **invert** option that reverses its constraint. When inverted, the facet shows rows that do *not* match the current selection. The `invert` property is stored in the facet configuration (`ListFacetConfig.invert`, `TextSearchFacetConfig._invert`).
+
+When the list facet is inverted in record mode, it uses `AllRowsRecordFilter` to require that *all* rows in a record match — rather than the default `AnyRowRecordFilter` which requires only one row to match.
+
+## Starring and flagging rows
+
+OpenRefine provides two built-in row flags — **star** and **flag** — that you can use to mark rows for follow-up. To work with them via facets:
+
+<Steps>
+  <Step title="Star or flag rows manually">
+    Click the star or flag icon to the left of any row to toggle it on or off.
+  </Step>
+  <Step title="Facet by star or flag">
+    Go to **All → Facet → Facet by star** or **Facet by flag**. This adds a text facet that shows `true` and `false` choices, letting you isolate starred or flagged rows.
+  </Step>
+  <Step title="Use the selection to bulk-edit">
+    With only the starred or flagged rows visible, any transformation you run applies only to those rows.
+  </Step>
+</Steps>
+
+<Tip>
+  Combine starring with other facets: first use facets to isolate the rows you care about, then star them all via **All → Edit rows → Star rows**. You can then clear the other facets and re-add the "Facet by star" facet to work on that saved selection later.
+</Tip>

@@ -1,0 +1,178 @@
+---
+title: "Cell Operations in OpenRefine: Transform, Edit, and Split"
+description: "Apply text transforms, mass edits, fill down, split, join, and transpose cells to reshape and clean values across your dataset efficiently."
+keywords: ["cell operations", "text transform", "mass edit", "fill down", "blank down", "split cells", "join cells", "transpose", "key-value columnize"]
+---
+
+Cell operations are the primary mechanism for modifying the contents of individual cells or groups of cells in OpenRefine. Most operations work on a named column and respect the current engine filter, meaning you can scope them to a subset of rows using facets or text filters before applying. Every operation is recorded in the undo history and can be reversed with a single click.
+
+## Text transform
+
+The text transform operation (`core/text-transform`) applies an expression to every cell in a column that passes the current row filter. The expression can be written in GREL, Jython, or Clojure, and the result of evaluating the expression replaces the original cell value.
+
+**Opening the dialog:** Click the column dropdown arrow, choose **Edit cells → Transform…**. The expression preview dialog opens so you can write and test your expression before committing.
+
+**Error handling** controls what happens when the expression throws an error for a particular cell:
+
+- **Keep original** — leaves the cell unchanged (default).
+- **Set to blank** — blanks the cell on error.
+- **Store error** — writes the error object into the cell.
+
+**Repeat** re-applies the same expression up to `repeatCount` times per cell, stopping early when the value stabilises between passes.
+
+```grel
+# Trim whitespace
+value.trim()
+
+# Convert to lowercase
+value.toLowercase()
+
+# Replace a substring
+value.replace("colour", "color")
+```
+
+<Note>
+  The expression receives the variable `value` (the current cell's value) along with `cells`, `row`, `rowIndex`, and `record`. See [Expressions](/transforming/expressions) for the full variable reference.
+</Note>
+
+## Mass edit
+
+The mass edit operation (`core/mass-edit`) performs a batch find-and-replace on a column. An expression is evaluated for each cell; if the result matches one of the configured `from` strings, the cell is replaced with the corresponding `to` value.
+
+An edit entry has the following fields:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `from` | `string[]` | One or more source strings that trigger the replacement |
+| `fromBlank` | `boolean` | Also match blank/null cells |
+| `fromError` | `boolean` | Also match cells that produced an expression error |
+| `to` | `any` | Replacement value (string, number, or date) |
+
+The last edit entry whose `fromBlank` or `fromError` flag matches wins when both apply to the same cell.
+
+**Opening the dialog:** Click the column dropdown, choose **Edit cells → Replace…** or use the text-facet cluster view to propose replacements automatically.
+
+```grel
+# Expression used with mass edit (evaluates to the value to match against)
+value
+```
+
+<Tip>
+  Mass edit is particularly efficient for correcting clustered values. Use a **Text facet** first to see all unique values, then merge related variants in one operation.
+</Tip>
+
+## Fill down
+
+The fill down operation (`core/fill-down`) propagates the last non-blank cell value downward to fill empty cells beneath it in the same column.
+
+In **row mode**, each blank cell is filled independently from the nearest preceding non-blank value. In **record mode**, the fill resets at the start of each record: blank rows within a record are filled from the first non-blank value in that record, but blank rows in a new record are not filled from the previous record.
+
+**Opening the dialog:** Click the column dropdown, choose **Edit cells → Fill down**.
+
+<Steps>
+  <Step title="Apply a facet (optional)">
+    Add a facet or filter to restrict which rows are affected before running fill down.
+  </Step>
+  <Step title="Run the operation">
+    Click the column dropdown → **Edit cells → Fill down**. Empty cells are immediately populated.
+  </Step>
+  <Step title="Verify">
+    Remove the facet and scroll through the column to confirm the propagation is correct.
+  </Step>
+</Steps>
+
+## Blank down
+
+Blank down (`core/blank-down`) is the inverse of fill down. It scans the column and blanks any cell whose value is identical to the immediately preceding non-blank cell, leaving only the first occurrence of each run of repeated values.
+
+In **record mode**, the comparison resets at the start of each record, so duplicate values are only blanked within the same record boundary.
+
+**Opening the dialog:** Click the column dropdown, choose **Edit cells → Blank down**.
+
+<Note>
+  Blank down and fill down are complementary operations. Use blank down to collapse repeated values before exporting, and fill down to expand them again for further processing.
+</Note>
+
+## Split multi-valued cells
+
+The split operation (`core/multivalued-cell-split`) splits cells in a column into multiple rows, one per fragment. The key column (typically the first column) identifies which record each new row belongs to.
+
+Two split modes are available:
+
+<Tabs>
+  <Tab title="By separator">
+    Splits the cell value on a literal string or a regular expression.
+
+    ```grel
+    # Example: splitting "a,b,c" on "," produces three rows: "a", "b", "c"
+    ```
+
+    Set **regex** to `true` to treat the separator as a regular expression (compiled with `Pattern.UNICODE_CHARACTER_CLASS`).
+  </Tab>
+  <Tab title="By field lengths">
+    Splits the cell value into substrings of fixed character lengths, specified as an array of integers (e.g., `[3, 5, 2]`). Each length must be non-negative.
+  </Tab>
+</Tabs>
+
+**Opening the dialog:** Click the column dropdown, choose **Edit cells → Split multi-valued cells…**.
+
+<Warning>
+  Split inserts new rows into the project. If existing rows below the split point contain data in the target column, OpenRefine uses those rows to hold the new fragments before allocating fresh empty rows.
+</Warning>
+
+## Join multi-valued cells
+
+The join operation (`core/multivalued-cell-join`) is the inverse of split: it collapses multiple rows within the same record into a single cell, concatenating their non-blank values with a chosen separator string.
+
+The operation identifies record boundaries using the key column: a new record begins whenever the key column cell is non-blank. All rows from one key cell to the next are merged; blank intermediate rows are skipped.
+
+**Opening the dialog:** Click the column dropdown, choose **Edit cells → Join multi-valued cells…**, then enter the separator character.
+
+```grel
+# Result of joining ["a", "b", "c"] with separator ", "
+# → "a, b, c"
+```
+
+## Transpose
+
+OpenRefine provides two transpose operations for reshaping tabular data.
+
+<AccordionGroup>
+  <Accordion title="Transpose columns into rows">
+    `core/transpose-columns-into-rows` converts a contiguous range of columns (starting at `startColumnName`, spanning `columnCount` columns, or all remaining columns when `columnCount` is 0 or negative) into new rows.
+
+    Two output layouts are available:
+
+    - **Combined column** — each column value is optionally prefixed with the original column header and written into a single new column (`combinedColumnName`). A separator string separates the header from the value.
+    - **Key/value columns** — the original header is written to a `keyColumnName` column and the cell value to a `valueColumnName` column. The transposed columns are removed and replaced by these two columns.
+
+    The **ignore blank cells** flag (default `true`) skips blank cells and avoids generating empty rows. The **fill down** flag copies non-transposed column values into every new row produced for a given source row.
+  </Accordion>
+  <Accordion title="Transpose rows into columns">
+    `core/transpose-rows-into-columns` takes a column and pivots every `rowCount` consecutive rows into separate columns. The original column is replaced by `rowCount` new columns named `<columnName> 1`, `<columnName> 2`, and so on.
+
+    This is useful when data is stored in a tall format where a fixed number of sequential rows form a single logical record.
+  </Accordion>
+</AccordionGroup>
+
+**Opening the dialogs:** Click the column dropdown, choose **Transpose → Transpose columns into rows…** or **Transpose → Transpose rows into columns…**.
+
+## Key-value columnize
+
+The key-value columnize operation (`core/key-value-columnize`) restructures data stored in a tall key-value format into a wide, one-column-per-key format.
+
+You specify three columns:
+
+| Parameter | Role |
+|-----------|------|
+| `keyColumnName` | Contains the key (future column header) |
+| `valueColumnName` | Contains the value to place under the new column |
+| `noteColumnName` | Optional; notes are concatenated with `;` into a separate `<noteColumn> : <key>` column |
+
+The first key encountered in each group becomes the record-boundary marker. Rows whose key column is blank are copied to the output as-is. When unchanged columns are present, rows with identical unchanged-column values are merged into the same output row.
+
+**Opening the dialog:** Click the column dropdown on the key column, choose **Edit column → Key/value columnize…**.
+
+## Editing a single cell
+
+To edit one cell directly, hover over the cell in the data grid and click the **Edit** pencil that appears. A small popup lets you change the value and, optionally, set the data type (text, number, boolean, date). The change is recorded as a history entry and can be undone.
